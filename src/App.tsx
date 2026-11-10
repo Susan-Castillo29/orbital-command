@@ -61,7 +61,7 @@ function App() {
                 {missions.map((item, index) => (
                   <button className={`mission-card ${mission.id === item.id ? 'selected' : ''}`} key={item.id} onClick={() => selectMission(item.id)} onMouseEnter={() => {}} role="listitem" aria-pressed={mission.id === item.id}>
                     <span className="mission-index">0{index + 1}</span>
-                    <span className="destination-icon" style={{ '--destination-color': item.color } as CSSProperties}>{item.id === 'sun' ? '☼' : item.id === 'asteroid' ? '◈' : '◉'}</span>
+                    <span className="destination-icon" style={{ '--destination-color': item.color } as CSSProperties}>{item.targetBodyId === 'sun' ? '☼' : item.targetBodyId === 'asteroid' ? '◈' : '◉'}</span>
                     <span className="mission-copy"><b>{item.name}</b><small>{item.category}</small></span>
                     <span className={`difficulty ${item.difficulty.toLowerCase()}`}>{item.difficulty}</span>
                     <span className="card-arrow">↗</span>
@@ -78,7 +78,7 @@ function App() {
               <div className="planet-label label-mars"><i />MARTE</div>
               <div className="universe-coordinates">RA 18h 36m 56s<br />DEC +38° 47′ 01″</div>
               <div className="scene-zoom" aria-hidden="true"><span>＋</span><i /><span>−</span></div>
-              <div className="target-readout"><span className="readout-dot" style={{ backgroundColor: mission.color }} /><div><small>DESTINO SELECCIONADO</small><b>{mission.destination.toUpperCase()}</b></div><span className="readout-coord">{missionIndex.toString().padStart(2, '0')} / 06</span></div>
+              <div className="target-readout"><span className="readout-dot" style={{ backgroundColor: mission.color }} /><div><small>DESTINO SELECCIONADO</small><b>{mission.destination.toUpperCase()}</b></div><span className="readout-coord">{missionIndex.toString().padStart(2, '0')} / {String(missions.length).padStart(2, '0')}</span></div>
               <div className="scene-footer"><span><i className="live-dot" /> ORBITAS EN TIEMPO REAL</span><span>MODELO ORBITAL EDUCATIVO · NO A ESCALA</span></div>
             </section>
 

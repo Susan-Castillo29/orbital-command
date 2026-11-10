@@ -18,15 +18,19 @@ Abre la URL local que indique Vite. Comprueba la versión de producción con `np
 - Arrastrar con el botón izquierdo: orientar nave; en órbita, girar cámara; en superficie, orientar el rover.
 - Clic en un astro: seleccionarlo y ver sus datos.
 - Clic en espacio vacío: fijar un punto de ruta.
-- **Iniciar ruta**: viajar automáticamente al cuerpo seleccionado; WASD cancela el piloto automático. Clic en espacio vacío establece una ruta manual.
-- **W/S**: avanzar o frenar; **A/D**: desplazamiento lateral en vuelo y giro del rover en superficie.
+- **Iniciar ruta**: viajar automáticamente a la órbita segura del cuerpo objetivo; la ruta usa un corredor elevado y WASD cancela el piloto automático. Clic en espacio vacío fija una ruta manual.
+- **W/S**: aplicar empuje hacia delante/atrás; **A/D**: empuje lateral en vuelo y giro del rover en superficie. La nave conserva inercia en el vacío, y el empuje consume combustible.
 - **Shift**: impulso temporal; **F**: alternar cámara de cabina; rueda: acercar/alejar.
 - En órbita lunar, elige una de las dos zonas y confirma el aterrizaje. El rover solo puede desplegarse en este escenario.
 - En superficie, conduce hasta un beacon, selecciónalo con clic y pulsa **E** o usa su acción contextual: primer uso escanea la formación; el siguiente recolecta una muestra. Repite en tres lugares distintos.
 - Vuelve a la estación, pulsa **E** para analizar las tres muestras y recargar la batería cuando esté baja. Desde la antena inicia la transmisión; el uplink tiene un retraso educativo de 4 segundos.
 - El HUD muestra combustible, energía, integridad, datos, comunicaciones y tiempo. Viajar y conducir consumen recursos; el rover puede recargarse en la estación.
+- En campañas remotas, pulsa **E** o activa el instrumento desde el panel para escanear tres sectores únicos; cada análisis consume energía y almacenamiento. Después transmite el informe con su retraso simulado.
+- El sistema calcula gravedad educativa con una aproximación de $1/r^2$, conserva casi toda la inercia y asigna velocidades orbitales con la relación de Kepler $T^2\propto a^3$. Las órbitas se muestran con el tiempo comprimido; no son efemérides reales.
+- Una frontera de exclusión bloquea acercamientos al Sol y colisiones con cuerpos/los anillos de Saturno, con alertas preventivas. El zoom orbital también respeta el radio seguro.
+- Si el combustible llega a nivel crítico, el panel permite confirmar el aborto y reinicio desde Tierra; se restauran recursos y se descarta el progreso de esa campaña.
 
-Los planetas, distancias, terrenos y velocidades son modelos educativos simplificados; no están a escala. En esta fase solo se habilita el descenso lunar, y la campaña **LUNAR FRONTIER** es la primera misión completa. Los escenarios de Marte (incluidas las tormentas de polvo), Europa, Saturno, asteroides, Júpiter y observación de la Tierra se añadirán después, reutilizando esta arquitectura; no se ofrecen como campañas completas todavía.
+Los planetas, distancias, terrenos y velocidades son modelos educativos simplificados; no están a escala ni sustituyen datos astronómicos reales. **LUNAR FRONTIER** ofrece aterrizaje y rover. **RED PLANET**, **EUROPA DEEP**, **SATURN OBSERVER**, **ASTEROID SEEKER**, **JUPITER STORM**, **EARTH GUARDIAN** y **Solar Watch** permiten viaje, órbita y muestreo remoto; no se habilita aterrizaje en cuerpos sin escenario de superficie correspondiente.
 
 ## Estructura
 
