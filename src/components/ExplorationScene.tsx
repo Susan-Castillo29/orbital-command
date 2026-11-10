@@ -282,11 +282,21 @@ export default function ExplorationScene({ mission, onExit }: Props) {
 
     const system = new THREE.Group();
     scene.add(system);
+    const SOLAR_EXCLUSION_RADIUS = 6.5;
+    const SOLAR_WARNING_RADIUS = 11;
     const sun = new THREE.Mesh(new THREE.SphereGeometry(2.15, 48, 40), new THREE.MeshBasicMaterial({ color: '#ffc86b' }));
     sun.userData.bodyId = 'sun';
     system.add(sun);
     const sunGlow = new THREE.Mesh(new THREE.SphereGeometry(2.48, 32, 24), new THREE.MeshBasicMaterial({ color: '#ff9d45', transparent: true, opacity: 0.17, side: THREE.BackSide }));
     system.add(sunGlow);
+    const exclusionPoints: THREE.Vector3[] = [];
+    for (let i = 0; i < 160; i += 1) {
+      const angle = i / 160 * Math.PI * 2;
+      exclusionPoints.push(new THREE.Vector3(Math.cos(angle) * SOLAR_EXCLUSION_RADIUS, 0, Math.sin(angle) * SOLAR_EXCLUSION_RADIUS));
+    }
+    const solarExclusion = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(exclusionPoints), new THREE.LineDashedMaterial({ color: '#ff8b67', dashSize: 0.38, gapSize: 0.24, transparent: true, opacity: 0.82 }));
+    solarExclusion.computeLineDistances();
+    system.add(solarExclusion);
 
     const bodies: BodyRuntime[] = [];
     const clickTargets: THREE.Object3D[] = [sun];
@@ -388,7 +398,7 @@ export default function ExplorationScene({ mission, onExit }: Props) {
     let autopilot = false;
     const flightVelocity = new THREE.Vector3();
     const initialRadial = new THREE.Vector3(ship.position.x, 0, ship.position.z).normalize();
-    const initialOrbitalSpeed = Math.sqrt(24 / Math.max(Math.hypot(ship.position.x, ship.position.z), 6.5));
+    const initialOrbitalSpeed = Math.sqrt(24 / Math.max(Math.hypot(ship.position.x, ship.position.z), SOLAR_EXCLUSION_RADIUS));
     flightVelocity.set(-initialRadial.z, 0, initialRadial.x).multiplyScalar(initialOrbitalSpeed);
     let currentProgress: LunarProgress = { ...progress };
     let currentSurvey: OrbitalSurvey = { ...orbitalSurvey };
@@ -459,12 +469,12 @@ export default function ExplorationScene({ mission, onExit }: Props) {
       let closestWarning = '';
       let closestMargin = Infinity;
       const solarDistance = position.distanceTo(sun.position);
-      const solarBoundary = 6.5;
+      const solarBoundary = SOLAR_EXCLUSION_RADIUS;
       if (solarDistance < solarBoundary) {
         reportHazard('LÍMITE SOLAR: acercamiento bloqueado. La zona de calor extremo es inaccesible.');
         return false;
       }
-      if (solarDistance < 11) {
+      if (solarDistance < SOLAR_WARNING_RADIUS) {
         closestMargin = solarDistance - solarBoundary;
         closestWarning = 'ADVERTENCIA: calor solar alto. Mantén distancia segura del Sol.';
       }
@@ -579,7 +589,7 @@ export default function ExplorationScene({ mission, onExit }: Props) {
       event.preventDefault();
       if (modeNow === 'orbit') {
         const body = getBody(selectedNow);
-        const physicalBoundary = selectedNow === 'sun' ? 6.5 : selectedNow === 'saturn' ? (body?.data.radius ?? 0) * 1.9 + 0.42 : (body?.data.radius ?? 0) + 0.42;
+        const physicalBoundary = selectedNow === 'sun' ? SOLAR_EXCLUSION_RADIUS : selectedNow === 'saturn' ? (body?.data.radius ?? 0) * 1.9 + 0.42 : (body?.data.radius ?? 0) + 0.42;
         const minCameraDistance = physicalBoundary / 0.78 + 0.45;
         orbitDistance = THREE.MathUtils.clamp(orbitDistance + event.deltaY * 0.008, Math.max(1.7, minCameraDistance), 28);
       }
@@ -907,7 +917,7 @@ export default function ExplorationScene({ mission, onExit }: Props) {
           } else currentResources.fuel = Math.max(0, currentResources.fuel - fuelCost);
           const acceleration = thrustAcceleration;
           const solarOffset = ship.position.clone().sub(sun.position);
-            const solarDistance = Math.max(solarOffset.length(), 6.5);
+            const solarDistance = Math.max(solarOffset.length(), SOLAR_EXCLUSION_RADIUS);
           acceleration.addScaledVector(solarOffset.normalize(), -24 / (solarDistance * solarDistance));
           for (const body of bodies) {
             if (body.data.id === 'asteroid') continue;
