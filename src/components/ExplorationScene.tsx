@@ -14,6 +14,9 @@ import {
   saveLunarProgress,
 } from '../systems/lunarCampaign';
 import type { ExplorationResources, LunarProgress } from '../systems/lunarCampaign';
+import { readStorage, writeStorage, removeStorage } from '../systems/storage';
+import { awardMission } from '../systems/playerProgress';
+import { playSound } from '../systems/audio';
 
 type Mode = 'flight' | 'orbit' | 'surface';
 type PointOfInterest = { object: THREE.Group; kind: 'rock' | 'station'; index: number; name: string; position: THREE.Vector3 };
@@ -37,13 +40,13 @@ const orbitalRegions: Record<string, string[]> = {
 
 function loadOrbitalSurvey(missionId: string): OrbitalSurvey {
   try {
-    const saved = localStorage.getItem(`orbital-command-survey-${missionId}`);
+    const saved = readStorage(`orbital-command-survey-${missionId}`);
     if (!saved) return { ...emptyOrbitalSurvey };
     const parsed = JSON.parse(saved) as Partial<OrbitalSurvey>;
     const scannedRegions = Array.isArray(parsed.scannedRegions)
       ? [...new Set(parsed.scannedRegions.filter((index) => Number.isInteger(index) && index >= 0 && index < 3))]
       : [];
-    return { arrived: Boolean(parsed.arrived), scannedRegions, transmitted: scannedRegions.length === 3 && Boolean(parsed.transmitted) };
+    return { arrived: parsed.arrived === true, scannedRegions, transmitted: scannedRegions.length === 3 && parsed.transmitted === true };
   } catch {
     return { ...emptyOrbitalSurvey };
   }
@@ -208,6 +211,7 @@ function getTutorialStep(progress: LunarProgress, mode: Mode, resources: Explora
 export default function ExplorationScene({ mission, onExit }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const cockpitRef = useRef(false);
+  const resourceWarningRef = useRef(false);
   const [progress, setProgress] = useState<LunarProgress>(() => loadLunarProgress(mission.id));
   const [orbitalSurvey, setOrbitalSurvey] = useState<OrbitalSurvey>(() => loadOrbitalSurvey(mission.id));
   const [samplesJustCompleted, setSamplesJustCompleted] = useState(false);
@@ -221,7 +225,7 @@ export default function ExplorationScene({ mission, onExit }: Props) {
   const [transmissionCountdown, setTransmissionCountdown] = useState(0);
   const [transmissionType, setTransmissionType] = useState<'lunar' | 'orbital' | null>(null);
   const [confirmRestart, setConfirmRestart] = useState(false);
-  const [tutorialDismissed, setTutorialDismissed] = useState(() => localStorage.getItem(`orbital-command-tutorial-${mission.id}`) === 'done');
+  const [tutorialDismissed, setTutorialDismissed] = useState(() => readStorage(`orbital-command-tutorial-${mission.id}`) === 'done');
   const [tutorialPointer, setTutorialPointer] = useState<{ x: number; y: number; angle: number; visible: boolean } | null>(null);
   const tutorialDismissedRef = useRef(tutorialDismissed);
   const [distance, setDistance] = useState(0);
@@ -415,11 +419,17 @@ export default function ExplorationScene({ mission, onExit }: Props) {
       window.clearTimeout(toastTimer);
       toastTimer = window.setTimeout(() => setMessage(''), 4300);
     };
+    const awardCompletion = () => {
+      const { progress: updated, awarded } = awardMission(mission.id, mission.reward, Math.round(mission.budget * 0.18));
+      window.dispatchEvent(new CustomEvent('orbital-player-progress', { detail: updated }));
+      if (awarded) { playSound('complete'); setMessageForSeconds(`Recompensa acreditada · +${mission.reward} XP · +${Math.round(mission.budget * 0.18)} CR.`); }
+    };
     const commitProgress = (patch: Partial<LunarProgress>, notification: string) => {
       currentProgress = { ...currentProgress, ...patch };
       setProgress(currentProgress);
       saveLunarProgress(mission.id, currentProgress);
       setMessageForSeconds(notification);
+      if ('scannedRocks' in patch || 'collectedSamples' in patch) playSound('scan');
     };
     const commitResources = (patch: Partial<ExplorationResources>) => {
       currentResources = { ...currentResources, ...patch };
@@ -429,7 +439,7 @@ export default function ExplorationScene({ mission, onExit }: Props) {
     const commitSurvey = (patch: Partial<OrbitalSurvey>, notification: string) => {
       currentSurvey = { ...currentSurvey, ...patch };
       setOrbitalSurvey(currentSurvey);
-      localStorage.setItem(`orbital-command-survey-${mission.id}`, JSON.stringify(currentSurvey));
+      writeStorage(`orbital-command-survey-${mission.id}`, JSON.stringify(currentSurvey));
       setMessageForSeconds(notification);
     };
     const setModeNow = (next: Mode) => {
@@ -728,9 +738,9 @@ export default function ExplorationScene({ mission, onExit }: Props) {
       currentSurvey = { ...emptyOrbitalSurvey };
       currentResources = { ...initialExplorationResources };
       saveLunarProgress(mission.id, currentProgress);
-      localStorage.setItem(`orbital-command-survey-${mission.id}`, JSON.stringify(currentSurvey));
+      writeStorage(`orbital-command-survey-${mission.id}`, JSON.stringify(currentSurvey));
       saveExplorationResources(mission.id, currentResources);
-      localStorage.removeItem(`orbital-command-tutorial-${mission.id}`);
+      removeStorage(`orbital-command-tutorial-${mission.id}`);
       setProgress(currentProgress);
       setOrbitalSurvey(currentSurvey);
       setResources(currentResources);
@@ -783,8 +793,9 @@ export default function ExplorationScene({ mission, onExit }: Props) {
       if (currentResources.communications < 12 || currentResources.energy < 5) { setMessageForSeconds('Recursos de enlace insuficientes · recarga en la estación antes de transmitir.'); return; }
       commitResources({ communications: currentResources.communications - 12, energy: currentResources.energy - 5 });
       commitProgress({ transmitted: true }, 'Enlace confirmado · resultados recibidos por el centro de control. ¡LUNAR FRONTIER completada!');
+      awardCompletion();
       tutorialDismissedRef.current = true;
-      localStorage.setItem(`orbital-command-tutorial-${mission.id}`, 'done');
+      writeStorage(`orbital-command-tutorial-${mission.id}`, 'done');
       setTutorialDismissed(true);
       setTutorialPointer(null);
     };
@@ -797,6 +808,7 @@ export default function ExplorationScene({ mission, onExit }: Props) {
       if (currentResources.communications < 15 || currentResources.energy < 5) { setMessageForSeconds('Recursos de comunicación insuficientes para el uplink orbital.'); return; }
       commitResources({ communications: currentResources.communications - 15, energy: currentResources.energy - 5 });
       commitSurvey({ transmitted: true }, `Datos de ${mission.destination} recibidos · ${mission.name} completada.`);
+      awardCompletion();
     };
     const onSetMode = (event: Event) => setModeNow((event as CustomEvent<Mode>).detail);
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
@@ -1030,6 +1042,9 @@ export default function ExplorationScene({ mission, onExit }: Props) {
         else setDistance(ship.position.length());
         setSpeed(currentSpeed);
         setResources({ ...currentResources });
+        const critical = [currentResources.fuel, currentResources.energy, currentResources.integrity, currentResources.communications].some((value) => value <= 20);
+        if (critical && !resourceWarningRef.current) { playSound('warning'); resourceWarningRef.current = true; }
+        else if (!critical) resourceWarningRef.current = false;
         if (elapsed % 5 < 0.25) saveExplorationResources(mission.id, currentResources);
       }
       renderer.render(scene, camera);
@@ -1087,7 +1102,7 @@ export default function ExplorationScene({ mission, onExit }: Props) {
   const tutorialStepNumber = tutorialOrder.indexOf(tutorialStep.id) + 1;
   const dismissTutorial = () => {
     tutorialDismissedRef.current = true;
-    localStorage.setItem(`orbital-command-tutorial-${mission.id}`, 'done');
+    writeStorage(`orbital-command-tutorial-${mission.id}`, 'done');
     setTutorialDismissed(true);
     setTutorialPointer(null);
   };

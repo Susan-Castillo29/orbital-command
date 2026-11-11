@@ -1,3 +1,5 @@
+import { readStorage, writeStorage } from './storage';
+
 export type LunarProgress = {
   arrived: boolean;
   orbit: boolean;
@@ -59,7 +61,7 @@ export const lunarObjectives = [
 
 export function loadLunarProgress(missionId: string): LunarProgress {
   try {
-    const saved = localStorage.getItem(`orbital-command-progress-${missionId}`);
+    const saved = readStorage(`orbital-command-progress-${missionId}`);
     if (!saved) return { ...initialLunarProgress };
     const parsed = JSON.parse(saved) as Partial<LunarProgress>;
     const scannedRocks = Array.isArray(parsed.scannedRocks)
@@ -69,11 +71,11 @@ export function loadLunarProgress(missionId: string): LunarProgress {
       ? [...new Set(parsed.collectedSamples.filter((index) => Number.isInteger(index) && scannedRocks.includes(index)))]
       : [];
     const landingZone = landingZones.some((zone) => zone.id === parsed.landingZone) ? parsed.landingZone! : null;
-    const arrived = Boolean(parsed.arrived);
-    const orbit = arrived && Boolean(parsed.orbit);
-    const landed = orbit && Boolean(landingZone) && Boolean(parsed.landed);
-    const roverDeployed = landed && Boolean(parsed.roverDeployed);
-    const analyzed = roverDeployed && scannedRocks.length === 3 && collectedSamples.length === 3 && Boolean(parsed.analyzed);
+    const arrived = parsed.arrived === true;
+    const orbit = arrived && parsed.orbit === true;
+    const landed = orbit && Boolean(landingZone) && parsed.landed === true;
+    const roverDeployed = landed && parsed.roverDeployed === true;
+    const analyzed = roverDeployed && scannedRocks.length === 3 && collectedSamples.length === 3 && parsed.analyzed === true;
     return {
       ...initialLunarProgress,
       arrived,
@@ -84,7 +86,7 @@ export function loadLunarProgress(missionId: string): LunarProgress {
       scannedRocks,
       collectedSamples,
       analyzed,
-      transmitted: analyzed && Boolean(parsed.transmitted),
+      transmitted: analyzed && parsed.transmitted === true,
     };
   } catch {
     return { ...initialLunarProgress };
@@ -92,12 +94,12 @@ export function loadLunarProgress(missionId: string): LunarProgress {
 }
 
 export function saveLunarProgress(missionId: string, progress: LunarProgress) {
-  localStorage.setItem(`orbital-command-progress-${missionId}`, JSON.stringify(progress));
+  writeStorage(`orbital-command-progress-${missionId}`, JSON.stringify(progress));
 }
 
 export function loadExplorationResources(missionId: string): ExplorationResources {
   try {
-    const saved = localStorage.getItem(`orbital-command-resources-${missionId}`);
+    const saved = readStorage(`orbital-command-resources-${missionId}`);
     if (!saved) return { ...initialExplorationResources };
     const parsed = JSON.parse(saved) as Partial<ExplorationResources>;
     return {
@@ -106,9 +108,9 @@ export function loadExplorationResources(missionId: string): ExplorationResource
       fuel: clampPercent(parsed.fuel),
       energy: clampPercent(parsed.energy),
       integrity: clampPercent(parsed.integrity),
-      storage: Math.max(0, Math.min(100, Number(parsed.storage) || 0)),
+      storage: finiteRange(parsed.storage, 0, 100, 0),
       communications: clampPercent(parsed.communications),
-      elapsedMinutes: Math.max(0, Number(parsed.elapsedMinutes) || 0),
+      elapsedMinutes: finiteRange(parsed.elapsedMinutes, 0, Number.MAX_SAFE_INTEGER, 0),
     };
   } catch {
     return { ...initialExplorationResources };
@@ -116,7 +118,7 @@ export function loadExplorationResources(missionId: string): ExplorationResource
 }
 
 export function saveExplorationResources(missionId: string, resources: ExplorationResources) {
-  localStorage.setItem(`orbital-command-resources-${missionId}`, JSON.stringify(resources));
+  writeStorage(`orbital-command-resources-${missionId}`, JSON.stringify(resources));
 }
 
 export function objectiveCompletion(progress: LunarProgress) {
@@ -127,4 +129,9 @@ export function objectiveCompletion(progress: LunarProgress) {
 function clampPercent(value: unknown) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? Math.min(100, Math.max(0, numeric)) : 100;
+}
+
+function finiteRange(value: unknown, min: number, max: number, fallback: number) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? Math.min(max, Math.max(min, numeric)) : fallback;
 }

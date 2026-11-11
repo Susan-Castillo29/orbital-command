@@ -3,27 +3,40 @@ import SolarSystemScene from './components/SolarSystemScene';
 import ExplorationScene from './components/ExplorationScene';
 import { missions } from './data/missions';
 import type { Mission } from './data/missions';
+import { readStorage, writeStorage } from './systems/storage';
+import { initialPlayerProgress, loadPlayerProgress, type PlayerProgress } from './systems/playerProgress';
+import { playSound } from './systems/audio';
 
-const savedMission = localStorage.getItem('orbital-command-mission');
+const savedMission = typeof window === 'undefined' ? null : readStorage('orbital-command-mission');
 const initialMission = missions.find((mission) => mission.id === savedMission) ?? missions[0];
 
 function App() {
   const [mission, setMission] = useState<Mission>(initialMission);
   const [screen, setScreen] = useState<'home' | 'mission' | 'exploration'>('home');
   const [notice, setNotice] = useState('');
+  const [player, setPlayer] = useState<PlayerProgress>(() => typeof window === 'undefined' ? initialPlayerProgress : loadPlayerProgress());
+  const [utc, setUtc] = useState(() => new Date().toISOString().slice(11, 19));
   const missionIndex = useMemo(() => missions.findIndex((item) => item.id === mission.id) + 1, [mission.id]);
 
   useEffect(() => {
-    localStorage.setItem('orbital-command-mission', mission.id);
+    writeStorage('orbital-command-mission', mission.id);
   }, [mission.id]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setUtc(new Date().toISOString().slice(11, 19)), 1000);
+    const onProgress = (event: Event) => setPlayer((event as CustomEvent<PlayerProgress>).detail);
+    window.addEventListener('orbital-player-progress', onProgress);
+    return () => { window.clearInterval(timer); window.removeEventListener('orbital-player-progress', onProgress); };
+  }, []);
 
   const selectMission = (id: string) => {
     const next = missions.find((item) => item.id === id);
-    if (next) setMission(next);
+    if (next) { setMission(next); playSound('select'); }
   };
 
   const beginBriefing = () => {
     setScreen('mission');
+    playSound('launch');
     setNotice(`${mission.name} · expediente de misión preparado`);
     window.setTimeout(() => setNotice(''), 3500);
   };
@@ -36,7 +49,7 @@ function App() {
           <span className="brand-name">ORBITAL <b>COMMAND</b><small>MISSION OPERATIONS SIMULATOR</small></span>
         </a>
         <div className="topbar-center"><span className="signal-icon">⌁</span> DEEP SPACE NETWORK <i className="live-dot" /> <b>CONNECTED</b></div>
-        <div className="topbar-right"><span className="top-status"><i className="live-dot" /> SYSTEMS NOMINAL</span><span className="top-divider" /><span className="utc-clock">UTC&nbsp; {new Date().toISOString().slice(11, 19)}</span><button className="icon-button" aria-label="Abrir configuración" onClick={() => { setNotice('Configuración: controles 3D activos · autoguardado habilitado'); window.setTimeout(() => setNotice(''), 3200); }}>⚙</button></div>
+        <div className="topbar-right"><span className="top-status"><i className="live-dot" /> SYSTEMS NOMINAL</span><span className="player-wallet" title={`Nivel ${Math.floor(player.xp / 500) + 1}`}><b>◈ {player.credits.toLocaleString('es-DO')}</b><small>{player.xp.toLocaleString('es-DO')} XP · NIV {Math.floor(player.xp / 500) + 1}</small></span><span className="top-divider" /><span className="utc-clock">UTC&nbsp; {utc}</span><button className="icon-button" aria-label="Abrir configuración" onClick={() => { setNotice('Configuración: controles 3D activos · autoguardado habilitado'); window.setTimeout(() => setNotice(''), 3200); }}>⚙</button></div>
       </header>
 
       <div className="work-area">
