@@ -2,13 +2,16 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { Mission } from '../data/missions';
+import { celestialBodies } from '../data/celestialBodies';
+import type { ShipId } from '../data/ships';
 
 type Props = {
   mission: Mission;
   onSelect: (id: string) => void;
+  shipId: ShipId;
 };
 
-type Body = { id: string; orbit: number; phase: number; group: THREE.Group; speed: number };
+type Body = { id: string; orbit: number; phase: number; group: THREE.Group; speed: number; parent?: string };
 
 function makeOrbit(radius: number, color: number, opacity = 0.19) {
   const points: THREE.Vector3[] = [];
@@ -46,7 +49,7 @@ function createPlanetTexture(base: string, light: string) {
   return texture;
 }
 
-function makeShip() {
+function makeShip(shipId: ShipId) {
   const ship = new THREE.Group();
   const gold = new THREE.MeshStandardMaterial({ color: 0xd7b56d, metalness: 0.78, roughness: 0.28 });
   const white = new THREE.MeshStandardMaterial({ color: 0xe7edf5, metalness: 0.56, roughness: 0.32 });
@@ -63,8 +66,9 @@ function makeShip() {
   mast.position.x = -0.5;
   ship.add(mast);
   for (const side of [-1, 1]) {
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.03, 0.36), blue);
-    panel.position.set(-0.02, 0, side * 0.68);
+    const panel = new THREE.Mesh(shipId === 'atlas' ? new THREE.BoxGeometry(1.05, 0.11, 0.48) : shipId === 'swift' ? new THREE.ConeGeometry(0.34, 1.15, 4) : new THREE.BoxGeometry(0.72, 0.03, 0.36), blue);
+    panel.position.set(-0.02, shipId === 'atlas' ? 0.08 : 0, side * (shipId === 'atlas' ? 0.74 : 0.68));
+    if (shipId === 'swift') panel.rotation.x = Math.PI / 2;
     ship.add(panel);
     const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.55, 6), gold);
     strut.rotation.x = Math.PI / 2;
@@ -74,7 +78,7 @@ function makeShip() {
   return ship;
 }
 
-export default function SolarSystemScene({ mission, onSelect }: Props) {
+export default function SolarSystemScene({ mission, onSelect, shipId }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const selectRef = useRef(onSelect);
   const selectedRef = useRef(mission.id);
@@ -88,7 +92,7 @@ export default function SolarSystemScene({ mission, onSelect }: Props) {
     scene.background = new THREE.Color('#050a12');
     scene.fog = new THREE.FogExp2('#050a12', 0.0045);
     const camera = new THREE.PerspectiveCamera(42, host.clientWidth / host.clientHeight, 0.1, 160);
-    camera.position.set(17, 15, 23);
+    camera.position.set(37, 38, 58);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.7));
     renderer.setSize(host.clientWidth, host.clientHeight);
@@ -100,8 +104,8 @@ export default function SolarSystemScene({ mission, onSelect }: Props) {
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.055;
-    controls.minDistance = 5;
-    controls.maxDistance = 48;
+    controls.minDistance = 9;
+    controls.maxDistance = 110;
     controls.target.set(0, 0, 0);
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.19;
@@ -147,21 +151,16 @@ export default function SolarSystemScene({ mission, onSelect }: Props) {
     );
     scene.add(sunHalo);
 
-    const specs = [
-      { id: 'mercury', radius: 0.3, orbit: 3.2, color: '#9b8d7e', light: '#d2bca0', speed: 0.42, phase: 1.4 },
-      { id: 'earth', radius: 0.88, orbit: 4.4, color: '#22679d', light: '#65c9f5', speed: 0.28, phase: 2.4 },
-      { id: 'moon', radius: 0.54, orbit: 6.1, color: '#6f7581', light: '#c4cbd7', speed: 0.2, phase: 0.8 },
-      { id: 'mars', radius: 0.74, orbit: 10, color: '#a64635', light: '#e48b68', speed: 0.15, phase: 3.8 },
-      { id: 'asteroid', radius: 0.43, orbit: 13.2, color: '#746552', light: '#c5b18a', speed: 0.12, phase: 5.2 },
-      { id: 'jupiter', radius: 1.34, orbit: 16.7, color: '#a97952', light: '#ebc59b', speed: 0.09, phase: 2.9 },
-    ];
     const bodies: Body[] = [];
-    for (const spec of specs) {
-      const orbit = makeOrbit(spec.orbit, spec.id === 'earth' ? 0x62bce9 : 0x6883a3, spec.id === 'earth' ? 0.3 : 0.16);
+    for (const spec of celestialBodies) {
+      const orbitRadius = spec.parentOrbit ?? Math.hypot(spec.position[0], spec.position[2]);
+      const phase = spec.orbitalParent ? 0.8 + bodies.length * 0.17 : Math.atan2(spec.position[2], spec.position[0]);
+      const orbit = makeOrbit(orbitRadius, spec.id === 'earth' ? 0x62bce9 : 0x6883a3, spec.id === 'earth' ? 0.3 : 0.16);
       orbit.rotation.x = Math.PI / 2;
-      scene.add(orbit);
+      const parent = spec.orbitalParent ? bodies.find((body) => body.id === spec.orbitalParent) : undefined;
+      (parent?.group ?? scene).add(orbit);
       const group = new THREE.Group();
-      const texture = createPlanetTexture(spec.color, spec.light);
+      const texture = createPlanetTexture(spec.color, spec.accent);
       const planet = new THREE.Mesh(
         new THREE.SphereGeometry(spec.radius, 36, 28),
         new THREE.MeshStandardMaterial({ map: texture, roughness: 0.82, metalness: 0.02 }),
@@ -172,17 +171,19 @@ export default function SolarSystemScene({ mission, onSelect }: Props) {
       if (spec.id === 'earth') {
         const atmosphere = new THREE.Mesh(new THREE.SphereGeometry(spec.radius * 1.075, 32, 24), new THREE.MeshBasicMaterial({ color: '#48b8ff', transparent: true, opacity: 0.12, side: THREE.BackSide }));
         group.add(atmosphere);
-        const moonlet = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12), new THREE.MeshStandardMaterial({ color: '#bdc4d2', roughness: 1 }));
-        moonlet.position.set(1.35, 0.12, 0);
-        group.add(moonlet);
+      }
+      if (spec.id === 'saturn') {
+        const rings = new THREE.Mesh(new THREE.RingGeometry(spec.radius * 1.3, spec.radius * 1.9, 64), new THREE.MeshStandardMaterial({ color: '#d8c49d', side: THREE.DoubleSide, transparent: true, opacity: 0.72, roughness: 0.9 }));
+        rings.rotation.x = Math.PI / 2.35; group.add(rings);
       }
       if (spec.id === 'jupiter') {
         const stripe = new THREE.Mesh(new THREE.TorusGeometry(spec.radius * 0.8, 0.075, 6, 48), new THREE.MeshBasicMaterial({ color: '#a85640', transparent: true, opacity: 0.75 }));
         stripe.position.set(0.35, -0.22, spec.radius * 0.72);
         group.add(stripe);
       }
-      scene.add(group);
-      bodies.push({ id: spec.id, orbit: spec.orbit, phase: spec.phase, group, speed: spec.speed });
+      (parent?.group ?? scene).add(group);
+      // Tiempo orbital comprimido para que también se perciba el movimiento exterior.
+      bodies.push({ id: spec.id, orbit: orbitRadius, phase, group, speed: 0.42 / Math.max(orbitRadius, 1) ** 1.1, parent: spec.orbitalParent });
     }
 
     // La franja del cinturón es una nube de pequeños cuerpos, no un anillo sólido.
@@ -190,7 +191,7 @@ export default function SolarSystemScene({ mission, onSelect }: Props) {
     const rockPositions = new Float32Array(rockCount * 3);
     for (let i = 0; i < rockCount; i += 1) {
       const angle = Math.random() * Math.PI * 2;
-      const radius = 11.6 + Math.random() * 1.25;
+      const radius = 23.2 + Math.random() * 2.2;
       rockPositions[i * 3] = Math.cos(angle) * radius;
       rockPositions[i * 3 + 1] = (Math.random() - 0.5) * 0.42;
       rockPositions[i * 3 + 2] = Math.sin(angle) * radius;
@@ -199,13 +200,12 @@ export default function SolarSystemScene({ mission, onSelect }: Props) {
     rockGeometry.setAttribute('position', new THREE.BufferAttribute(rockPositions, 3));
     scene.add(new THREE.Points(rockGeometry, new THREE.PointsMaterial({ color: '#b59a72', size: 0.075, transparent: true, opacity: 0.74 })));
 
-    const ship = makeShip();
+    const ship = makeShip(shipId);
     ship.scale.setScalar(0.73);
     scene.add(ship);
-    const shipOrbit = makeOrbit(4.4, 0x61d9ff, 0.62);
+    const shipOrbit = makeOrbit(1.12, 0x61d9ff, 0.62);
     shipOrbit.rotation.x = Math.PI / 2;
-    shipOrbit.scale.setScalar(1.12);
-    scene.add(shipOrbit);
+    bodies.find((body) => body.id === 'earth')?.group.add(shipOrbit);
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
@@ -234,9 +234,9 @@ export default function SolarSystemScene({ mission, onSelect }: Props) {
         body.group.position.set(Math.cos(angle) * body.orbit, 0, Math.sin(angle) * body.orbit);
         body.group.rotation.y = elapsed * 0.13;
       }
-      const earthPhase = bodies.find((body) => body.id === 'earth')?.phase ?? 0;
-      const shipAngle = earthPhase + elapsed * 0.11;
-      ship.position.set(Math.cos(shipAngle) * 4.92, 0.24 * Math.sin(elapsed * 0.7), Math.sin(shipAngle) * 4.92);
+      const earth = bodies.find((body) => body.id === 'earth');
+      const shipAngle = elapsed * 0.18;
+      ship.position.set((earth?.group.position.x ?? 0) + Math.cos(shipAngle) * 1.12, 0.24 * Math.sin(elapsed * 0.7), (earth?.group.position.z ?? 0) + Math.sin(shipAngle) * 1.12);
       ship.rotation.y = -shipAngle + Math.PI / 2;
       sunHalo.scale.setScalar(1 + Math.sin(elapsed * 0.7) * 0.018);
       stars.rotation.y = elapsed * 0.0015;
@@ -275,13 +275,13 @@ export default function SolarSystemScene({ mission, onSelect }: Props) {
       renderer.dispose();
       renderer.domElement.remove();
     };
-  }, []);
+  }, [shipId]);
 
   return (
     <div className="space-scene" ref={hostRef} aria-label={`Vista 3D del sistema solar; destino seleccionado: ${mission.destination}`}>
       <div className="scene-topline"><span><i className="live-dot" /> VISUALIZACIÓN EN VIVO</span><span>SECTOR SOL · 01</span></div>
       <div className="scene-controls-hint"><span>DRAG <b>ROTAR</b></span><span>SCROLL <b>ZOOM</b></span><span>CLICK <b>SELECCIONAR</b></span></div>
-      <div className="scene-scale"><span>ESCALA EDUCATIVA</span><div><i /></div><small>NO A ESCALA</small></div>
+      <div className="scene-scale"><span>ÓRBITAS Y TAMAÑOS DIFERENCIADOS</span><div><i /></div><small>DISTANCIA COMPRIMIDA · TAMAÑO EXAGERADO</small></div>
     </div>
   );
 }

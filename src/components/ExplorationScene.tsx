@@ -17,6 +17,7 @@ import type { ExplorationResources, LunarProgress } from '../systems/lunarCampai
 import { readStorage, writeStorage, removeStorage } from '../systems/storage';
 import { awardMission } from '../systems/playerProgress';
 import { playSound } from '../systems/audio';
+import type { ShipId } from '../data/ships';
 
 type Mode = 'flight' | 'orbit' | 'surface';
 type PointOfInterest = { object: THREE.Group; kind: 'rock' | 'station'; index: number; name: string; position: THREE.Vector3 };
@@ -24,7 +25,7 @@ type BodyRuntime = { data: (typeof celestialBodies)[number]; group: THREE.Group;
 type TutorialStep = { id: string; title: string; instruction: string };
 type OrbitalSurvey = { arrived: boolean; scannedRegions: number[]; transmitted: boolean };
 
-type Props = { mission: Mission; onExit: () => void };
+type Props = { mission: Mission; onExit: () => void; shipId: ShipId };
 
 const tutorialOrder = ['travel', 'landing-zone', 'land', 'surface', 'scan', 'sample', 'station', 'recharge', 'analyze', 'antenna', 'transmit', 'complete'];
 const emptyOrbitalSurvey: OrbitalSurvey = { arrived: false, scannedRegions: [], transmitted: false };
@@ -164,9 +165,9 @@ function createSurface() {
   return { root, rover, points, setZone };
 }
 
-function makeShip() {
+function makeShip(shipId: ShipId) {
   const ship = new THREE.Group();
-  const hull = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.23, 1.05, 12), new THREE.MeshStandardMaterial({ color: '#dfe9ef', metalness: 0.55, roughness: 0.34 }));
+  const hull = new THREE.Mesh(shipId === 'atlas' ? new THREE.CylinderGeometry(0.25, 0.32, 1.35, 10) : new THREE.CylinderGeometry(0.16, 0.23, 1.05, shipId === 'swift' ? 8 : 12), new THREE.MeshStandardMaterial({ color: shipId === 'atlas' ? '#d3a866' : '#dfe9ef', metalness: 0.55, roughness: 0.34 }));
   hull.rotation.x = Math.PI / 2;
   ship.add(hull);
   const nose = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.48, 12), new THREE.MeshStandardMaterial({ color: '#63c9e8', metalness: 0.4, roughness: 0.32 }));
@@ -177,10 +178,11 @@ function makeShip() {
   engine.rotation.x = Math.PI / 2;
   engine.position.z = 0.61;
   ship.add(engine);
-  const panelMaterial = new THREE.MeshStandardMaterial({ color: '#2476a7', metalness: 0.45, roughness: 0.35, emissive: '#0b2842' });
+  const panelMaterial = new THREE.MeshStandardMaterial({ color: shipId === 'swift' ? '#34a7bc' : shipId === 'atlas' ? '#9a6739' : '#2476a7', metalness: 0.45, roughness: 0.35, emissive: '#0b2842' });
   for (const side of [-1, 1]) {
-    const panel = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.045, 0.5), panelMaterial);
-    panel.position.set(side * 0.85, 0, 0.08);
+    const panel = new THREE.Mesh(shipId === 'atlas' ? new THREE.BoxGeometry(0.62, 0.26, 0.72) : shipId === 'swift' ? new THREE.ConeGeometry(0.36, 1.3, 4) : new THREE.BoxGeometry(1.05, 0.045, 0.5), panelMaterial);
+    panel.position.set(side * (shipId === 'atlas' ? 0.7 : 0.85), shipId === 'atlas' ? 0.06 : 0, 0.08);
+    if (shipId === 'swift') { panel.rotation.x = Math.PI / 2; panel.rotation.z = side * -0.4; }
     ship.add(panel);
     const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.72, 6), new THREE.MeshStandardMaterial({ color: '#d2b776', metalness: 0.7 }));
     strut.rotation.z = Math.PI / 2;
@@ -208,7 +210,7 @@ function getTutorialStep(progress: LunarProgress, mode: Mode, resources: Explora
   return { id: 'complete', title: 'Misión completada', instruction: 'La ciencia lunar llegó al centro de control. ¡Buen trabajo, comandante!' };
 }
 
-export default function ExplorationScene({ mission, onExit }: Props) {
+export default function ExplorationScene({ mission, onExit, shipId }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const cockpitRef = useRef(false);
   const resourceWarningRef = useRef(false);
@@ -217,6 +219,7 @@ export default function ExplorationScene({ mission, onExit }: Props) {
   const [samplesJustCompleted, setSamplesJustCompleted] = useState(false);
   const [resources, setResources] = useState<ExplorationResources>(() => loadExplorationResources(mission.id));
   const [mode, setMode] = useState<Mode>('flight');
+  const [landingInProgress, setLandingInProgress] = useState(false);
   const [selectedId, setSelectedId] = useState(mission.targetBodyId);
   const [hazardWarning, setHazardWarning] = useState('');
   const [landingZoneId, setLandingZoneId] = useState(() => loadLunarProgress(mission.id).landingZone ?? 'shackleton');
@@ -234,6 +237,7 @@ export default function ExplorationScene({ mission, onExit }: Props) {
   const [message, setMessage] = useState('Navegación libre activa · selecciona un astro o marca una ruta.');
 
   useEffect(() => { tutorialDismissedRef.current = tutorialDismissed; }, [tutorialDismissed]);
+  useEffect(() => { window.dispatchEvent(new CustomEvent('orbital-ship-change', { detail: shipId })); }, [shipId]);
 
   useEffect(() => {
     if (progress.collectedSamples.length < 3) return;
@@ -360,10 +364,25 @@ export default function ExplorationScene({ mission, onExit }: Props) {
     asteroidGeometry.setAttribute('position', new THREE.BufferAttribute(asteroidPositions, 3));
     system.add(new THREE.Points(asteroidGeometry, new THREE.PointsMaterial({ color: '#b7a17b', size: 0.095, transparent: true, opacity: 0.82 })));
 
-    const ship = makeShip();
+    const ship = makeShip(shipId);
     ship.position.set(0, 1.1, 12);
     ship.rotation.order = 'YXZ';
     system.add(ship);
+    const onShipChange = (event: Event) => {
+      const nextId = (event as CustomEvent<ShipId>).detail;
+      ship.traverse((object) => {
+        if (object instanceof THREE.Mesh) {
+          object.geometry.dispose();
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          materials.forEach((material) => material.dispose());
+        }
+      });
+      ship.clear();
+      const replacement = makeShip(nextId);
+      while (replacement.children.length) ship.add(replacement.children[0]);
+      ship.scale.setScalar(nextId === 'swift' ? 0.66 : nextId === 'atlas' ? 0.86 : 0.73);
+    };
+    window.addEventListener('orbital-ship-change', onShipChange);
     const routeGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
     const routeLine = new THREE.Line(routeGeometry, new THREE.LineDashedMaterial({ color: '#6be4ff', dashSize: 0.45, gapSize: 0.28, transparent: true, opacity: 0.85 }));
     routeLine.computeLineDistances();
@@ -411,6 +430,7 @@ export default function ExplorationScene({ mission, onExit }: Props) {
     let lastHudUpdate = 0;
     let lastGuideUpdate = 0;
     let currentSpeed = 0;
+    let landingSequence: { start: THREE.Vector3; end: THREE.Vector3; elapsed: number; zoneId: string } | null = null;
     let toastTimer = 0;
     const clock = new THREE.Clock();
 
@@ -734,6 +754,8 @@ export default function ExplorationScene({ mission, onExit }: Props) {
       reportHazard('RUTA SEGURA: piloto automático usará un corredor elevado para rodear planetas y el Sol.');
     };
     const onRestartMission = () => {
+      landingSequence = null;
+      setLandingInProgress(false);
       currentProgress = { ...initialLunarProgress };
       currentSurvey = { ...emptyOrbitalSurvey };
       currentResources = { ...initialExplorationResources };
@@ -780,11 +802,12 @@ export default function ExplorationScene({ mission, onExit }: Props) {
       }
       if (!landingZones.some((zone) => zone.id === zoneId)) { setMessageForSeconds('Selecciona una zona de aterrizaje válida.'); return; }
       if (currentResources.fuel < 12 || currentResources.integrity < 35) { setMessageForSeconds('Recursos insuficientes para el descenso controlado.'); return; }
-      surface.setZone(zoneId);
-      commitResources({ fuel: currentResources.fuel - 12, energy: Math.max(currentResources.energy, 65), integrity: currentResources.integrity - 2 });
-      commitProgress({ landingZone: zoneId, landed: true, roverDeployed: true }, 'Aterrizaje confirmado · rover desplegado en la región seleccionada.');
-      setSelectedPoi(null);
-      setModeNow('surface');
+      if (landingSequence) return;
+      const moonPosition = getBodyPosition('moon') ?? new THREE.Vector3();
+      landingSequence = { start: ship.position.clone(), end: moonPosition.clone().add(new THREE.Vector3(0, 1.7, 0)), elapsed: 0, zoneId };
+      setLandingInProgress(true);
+      setMessageForSeconds('Descenso iniciado · estabilizando actitud, frenando y desplegando tren de aterrizaje.');
+      playSound('launch');
     };
     const onInteractPoi = (event: Event) => interactPoint((event as CustomEvent<number>).detail);
     const onTransmit = () => {
@@ -834,6 +857,28 @@ export default function ExplorationScene({ mission, onExit }: Props) {
       animationId = window.requestAnimationFrame(animate);
       const delta = Math.min(clock.getDelta(), 0.045);
       const elapsed = clock.elapsedTime;
+      if (landingSequence) {
+        landingSequence.elapsed += delta;
+        const t = THREE.MathUtils.clamp(landingSequence.elapsed / 3.2, 0, 1);
+        const ease = t * t * (3 - 2 * t);
+        ship.position.lerpVectors(landingSequence.start, landingSequence.end, ease);
+        ship.rotation.z = Math.sin(t * Math.PI) * 0.12 * (1 - t);
+        desiredCamera.copy(ship.position).add(new THREE.Vector3(0, 2.6, 7));
+        camera.position.lerp(desiredCamera, 1 - Math.exp(-delta * 2.8));
+        camera.lookAt(ship.position);
+        if (t >= 1) {
+          const zoneId = landingSequence.zoneId;
+          landingSequence = null;
+          surface.setZone(zoneId);
+          commitResources({ fuel: currentResources.fuel - 12, energy: Math.max(currentResources.energy, 65), integrity: currentResources.integrity - 2 });
+          commitProgress({ landingZone: zoneId, landed: true, roverDeployed: true }, 'Aterrizaje seguro · rover desplegado en la región seleccionada.');
+          setSelectedPoi(null);
+          setLandingInProgress(false);
+          setModeNow('surface');
+        }
+        renderer.render(scene, camera);
+        return;
+      }
       sun.rotation.y = elapsed * 0.035;
       sunGlow.scale.setScalar(1 + Math.sin(elapsed * 0.8) * 0.018);
       for (const body of bodies) {
@@ -1073,6 +1118,7 @@ export default function ExplorationScene({ mission, onExit }: Props) {
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
       window.removeEventListener('orbital-start-route', onStartRoute);
+      window.removeEventListener('orbital-ship-change', onShipChange);
       window.removeEventListener('orbital-restart-mission', onRestartMission);
       window.removeEventListener('orbital-choose-landing-zone', onChooseLandingZone);
       window.removeEventListener('orbital-land', onLand);
@@ -1186,13 +1232,14 @@ export default function ExplorationScene({ mission, onExit }: Props) {
       <div className="exploration-stage" ref={hostRef} />
       <div className="explore-topbar"><button className="explore-back" onClick={onExit}>← CENTRO DE MISIÓN</button><div><span className="live-dot" /> EXPLORACIÓN 3D <small>· {mode === 'surface' ? 'SUPERFICIE' : mode === 'orbit' ? 'ÓRBITA' : cockpit ? 'CABINA' : 'VUELO LIBRE'}</small></div><span className="explore-coords">{speed.toFixed(1)} <small>m/s</small></span></div>
       {hazardWarning && <div className={`flight-warning ${hazardWarning.startsWith('ADVERTENCIA') ? 'caution' : 'blocked'}`} role="alert"><span>⚠</span>{hazardWarning}</div>}
+      {landingInProgress && <div className="landing-overlay" role="status"><span>SECUENCIA DE DESCENSO</span><b>Frenado orbital y aproximación</b><div><i /></div><small>CONTROL AUTOMÁTICO · MANTÉN LA TELEMETRÍA A LA VISTA</small></div>}
       <aside className="explore-target-panel">
         <span className="eyebrow">NAVEGACIÓN · DESTINO</span>
         <h2>{selectedName}</h2>
         <p>{selectedBody?.fact ?? 'La estrella central del sistema: objetivo de observación remota.'}</p>
         <div className="target-metrics"><div><small>DISTANCIA</small><b>{distance.toFixed(1)} <i>u.e.</i></b></div><div><small>CAMPAÑA</small><b>{mission.name}</b></div></div>
         {mode === 'flight' && <button className={`primary-button explore-action ${tutorialActive && ['travel', 'surface'].includes(tutorialStep.id) ? 'guided-action' : ''}`} onClick={startTravel}>{progress.landed && mission.id === 'moon' ? 'VOLVER A LA LUNA' : 'INICIAR RUTA'} <b>↗</b></button>}
-        {mode === 'orbit' && mission.id === 'moon' && selectedId === 'moon' && !progress.landed && <div className="landing-selector"><label htmlFor="landing-zone">ZONA DE DESCENSO</label><select className={tutorialActive && tutorialStep.id === 'landing-zone' ? 'guided-action' : ''} id="landing-zone" value={landingZoneId} onChange={(event) => selectLandingZone(event.target.value)}>{landingZones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}</select><small>{selectedZone.description}</small><button className={`primary-button explore-action ${tutorialActive && tutorialStep.id === 'land' ? 'guided-action' : ''}`} onClick={beginLanding} disabled={!progress.arrived || resources.fuel < 12}>ATERRIZAR AQUÍ <b>↓</b></button><span className="landing-note">DESCENSO: 12% COMBUSTIBLE · 2% INTEGRIDAD</span></div>}
+        {mode === 'orbit' && mission.id === 'moon' && selectedId === 'moon' && !progress.landed && <div className="landing-selector"><label htmlFor="landing-zone">ZONA DE DESCENSO</label><select className={tutorialActive && tutorialStep.id === 'landing-zone' ? 'guided-action' : ''} id="landing-zone" value={landingZoneId} disabled={landingInProgress} onChange={(event) => selectLandingZone(event.target.value)}>{landingZones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}</select><small>{selectedZone.description}</small><button className={`primary-button explore-action ${tutorialActive && tutorialStep.id === 'land' ? 'guided-action' : ''}`} onClick={beginLanding} disabled={!progress.arrived || resources.fuel < 12 || landingInProgress}>{landingInProgress ? 'DESCENSO EN CURSO…' : 'INICIAR ATERRIZAJE'} <b>↘</b></button><span className="landing-note">DESCENSO GUIADO · 12% COMBUSTIBLE · 2% INTEGRIDAD</span></div>}
         {mode === 'orbit' && mission.id === 'moon' && progress.landed && <button className={`primary-button explore-action ${tutorialActive && tutorialStep.id === 'surface' ? 'guided-action' : ''}`} onClick={() => enterOrbitOrSurface('surface')}>VOLVER AL SITIO DEL ROVER <b>↓</b></button>}
         {mode === 'orbit' && !(mission.id === 'moon' && selectedId === 'moon') && <button className="secondary-button explore-action" onClick={() => enterOrbitOrSurface('flight')}>RETOMAR VUELO <b>↗</b></button>}
         {mode === 'surface' && <button className="secondary-button explore-action" onClick={() => enterOrbitOrSurface('orbit')}>REGRESAR A ÓRBITA <b>↑</b></button>}

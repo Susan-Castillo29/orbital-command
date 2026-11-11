@@ -28,3 +28,24 @@
 button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid #8ce4ff;outline-offset:3px}
 @media(max-width:720px){.player-wallet{padding:4px 6px}.player-wallet b{font-size:8px}.player-wallet small{font-size:5px}.utc-clock{display:none}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+.ship-picker{display:flex;align-items:center;gap:6px;padding:4px 7px;border:1px solid rgba(118,220,255,.2);border-radius:6px;background:rgba(20,39,53,.45);color:#7f9bb0;font:6px var(--mono);letter-spacing:.5px}
+.ship-picker select{max-width:82px;border:0;background:transparent;color:#bdeaff;font:8px var(--mono);cursor:pointer}.ship-picker option{background:#101b29;color:#e8edf5}
+.theme-toggle{margin:0;color:#9de4ff;font-size:18px}
+.landing-overlay{position:absolute;z-index:9;left:50%;top:18%;transform:translateX(-50%);width:min(360px,calc(100% - 28px));padding:16px 18px;border:1px solid rgba(119,222,255,.42);border-radius:12px;background:rgba(6,15,26,.88);backdrop-filter:blur(14px);box-shadow:0 15px 55px #0008;text-align:center;animation:land-in .35s ease-out}
+.landing-overlay>span,.landing-overlay>small{display:block;color:#8ca7bc;font:7px var(--mono);letter-spacing:.8px}.landing-overlay>b{display:block;margin:7px 0 12px;color:#e9f5fc;font:500 16px var(--display)}.landing-overlay>div{height:4px;overflow:hidden;border-radius:9px;background:#203346}.landing-overlay>div i{display:block;width:40%;height:100%;border-radius:9px;background:linear-gradient(90deg,#58cce9,#a8f0ff);animation:landing-progress 3.2s ease-in-out forwards}.landing-overlay>small{margin-top:9px;font-size:6px}
+@keyframes landing-progress{from{width:2%}to{width:100%}}@keyframes land-in{from{opacity:0;translate:0 -8px}to{opacity:1;translate:0 0}}
+.app-shell[data-theme="light"]{--bg:#eef3f7;--panel:#fff;--panel2:#f5f8fb;--line:rgba(65,93,120,.2);--muted:#546a7b;color:#1d3040;background:#eef3f7}
+.app-shell[data-theme="light"] .topbar,.app-shell[data-theme="light"] .rail{background:rgba(249,252,255,.97)}
+.app-shell[data-theme="light"] .brand,.app-shell[data-theme="light"] .brand-name,.app-shell[data-theme="light"] .mission-column h1,.app-shell[data-theme="light"] .section-heading h2,.app-shell[data-theme="light"] .destination-name h2,.app-shell[data-theme="light"] .briefing-screen-heading h1{color:#1e3548}
+.app-shell[data-theme="light"] .mission-layout,.app-shell[data-theme="light"] .briefing-screen{background:radial-gradient(ellipse at 68% 46%,rgba(119,173,207,.14),transparent 49%),#eef3f7}
+.app-shell[data-theme="light"] .mission-card,.app-shell[data-theme="light"] .briefing-detail-grid,.app-shell[data-theme="light"] .briefing-column{background:#f9fbfd}
+.app-shell[data-theme="light"] .mission-card.selected{background:linear-gradient(100deg,#e4f2f9,#f7fbfd)}
+.app-shell[data-theme="light"] .mission-copy b,.app-shell[data-theme="light"] .briefing-detail-card h2{color:#244055}
+.app-shell[data-theme="light"] .mission-copy small,.app-shell[data-theme="light"] .intro-copy,.app-shell[data-theme="light"] .objective-text,.app-shell[data-theme="light"] .mission-description,.app-shell[data-theme="light"] .briefing-screen-heading>p{color:#5d7182}
+.app-shell[data-theme="light"] .statusbar{color:#63798b}
+.app-shell[data-theme="light"] .top-status,.app-shell[data-theme="light"] .utc-clock{color:#536b7e}
+.app-shell[data-theme="light"] .icon-button{color:#3d677f}
+.app-shell[data-theme="light"] .player-wallet,.app-shell[data-theme="light"] .ship-picker{background:#e7f1f6;border-color:#c5dce8}
+.app-shell[data-theme="light"] .player-wallet b,.app-shell[data-theme="light"] .ship-picker select{color:#1b627f}
+.app-shell[data-theme="light"] .exploration-view{color:#e8edf5}
+@media(max-width:720px){.ship-picker{gap:3px;padding:3px 4px}.ship-picker>span{display:none}.ship-picker select{max-width:66px;font-size:7px}.topbar-right{gap:5px}.landing-overlay{top:15%;padding:13px}}
