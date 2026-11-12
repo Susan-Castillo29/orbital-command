@@ -3,40 +3,59 @@ import SolarSystemScene from './components/SolarSystemScene';
 import ExplorationScene from './components/ExplorationScene';
 import { missions } from './data/missions';
 import type { Mission } from './data/missions';
+import { readStorage, writeStorage } from './systems/storage';
+import { initialPlayerProgress, loadPlayerProgress, type PlayerProgress } from './systems/playerProgress';
+import { playSound } from './systems/audio';
+import { ships, type ShipId } from './data/ships';
 
-const savedMission = localStorage.getItem('orbital-command-mission');
+const savedMission = typeof window === 'undefined' ? null : readStorage('orbital-command-mission');
 const initialMission = missions.find((mission) => mission.id === savedMission) ?? missions[0];
 
 function App() {
   const [mission, setMission] = useState<Mission>(initialMission);
   const [screen, setScreen] = useState<'home' | 'mission' | 'exploration'>('home');
   const [notice, setNotice] = useState('');
+  const [player, setPlayer] = useState<PlayerProgress>(() => typeof window === 'undefined' ? initialPlayerProgress : loadPlayerProgress());
+  const [utc, setUtc] = useState(() => new Date().toISOString().slice(11, 19));
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => readStorage('orbital-command-theme') === 'light' ? 'light' : 'dark');
+  const [shipId, setShipId] = useState<ShipId>(() => {
+    const saved = readStorage('orbital-command-ship');
+    return ships.some((ship) => ship.id === saved) ? saved as ShipId : 'pioneer';
+  });
   const missionIndex = useMemo(() => missions.findIndex((item) => item.id === mission.id) + 1, [mission.id]);
 
   useEffect(() => {
-    localStorage.setItem('orbital-command-mission', mission.id);
+    writeStorage('orbital-command-mission', mission.id);
   }, [mission.id]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setUtc(new Date().toISOString().slice(11, 19)), 1000);
+    const onProgress = (event: Event) => setPlayer((event as CustomEvent<PlayerProgress>).detail);
+    window.addEventListener('orbital-player-progress', onProgress);
+    return () => { window.clearInterval(timer); window.removeEventListener('orbital-player-progress', onProgress); };
+  }, []);
 
   const selectMission = (id: string) => {
     const next = missions.find((item) => item.id === id);
-    if (next) setMission(next);
+    if (next) { setMission(next); playSound('select'); }
   };
 
   const beginBriefing = () => {
     setScreen('mission');
+    playSound('launch');
     setNotice(`${mission.name} · expediente de misión preparado`);
     window.setTimeout(() => setNotice(''), 3500);
   };
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-theme={theme}>
       <header className="topbar">
         <a className="brand" href="#home" onClick={() => setScreen('home')} aria-label="Orbital Command, inicio">
           <span className="brand-mark"><span /></span>
           <span className="brand-name">ORBITAL <b>COMMAND</b><small>MISSION OPERATIONS SIMULATOR</small></span>
         </a>
         <div className="topbar-center"><span className="signal-icon">⌁</span> DEEP SPACE NETWORK <i className="live-dot" /> <b>CONNECTED</b></div>
-        <div className="topbar-right"><span className="top-status"><i className="live-dot" /> SYSTEMS NOMINAL</span><span className="top-divider" /><span className="utc-clock">UTC&nbsp; {new Date().toISOString().slice(11, 19)}</span><button className="icon-button" aria-label="Abrir configuración" onClick={() => { setNotice('Configuración: controles 3D activos · autoguardado habilitado'); window.setTimeout(() => setNotice(''), 3200); }}>⚙</button></div>
+        <div className="topbar-right"><span className="top-status"><i className="live-dot" /> SYSTEMS NOMINAL</span><span className="player-wallet" title={`Nivel ${Math.floor(player.xp / 500) + 1}`}><b>◈ {player.credits.toLocaleString('es-DO')}</b><small>{player.xp.toLocaleString('es-DO')} XP · NIV {Math.floor(player.xp / 500) + 1}</small></span><label className="ship-picker"><span>NAVE</span><select aria-label="Elegir nave" value={shipId} onChange={(event) => { const next = event.target.value as ShipId; setShipId(next); writeStorage('orbital-command-ship', next); playSound('select'); }} title={ships.find((ship) => ship.id === shipId)?.description}>{ships.map((ship) => <option value={ship.id} key={ship.id}>{ship.name}</option>)}</select></label><button className="icon-button theme-toggle" aria-label={theme === 'dark' ? 'Activar modo claro' : 'Activar modo oscuro'} title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'} onClick={() => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); writeStorage('orbital-command-theme', next); }}> {theme === 'dark' ? '☼' : '☾'} </button><span className="top-divider" /><span className="utc-clock">UTC&nbsp; {utc}</span></div>
       </header>
 
       <div className="work-area">
@@ -72,7 +91,7 @@ function App() {
             </div>
 
             <section className="universe-panel" aria-label="Universo 3D interactivo">
-              <SolarSystemScene mission={mission} onSelect={selectMission} />
+              <SolarSystemScene mission={mission} onSelect={selectMission} shipId={shipId} />
               <div className="scene-title"><span>VISUALIZACIÓN TÁCTICA</span><strong>SISTEMA SOLAR</strong></div>
               <div className="planet-label label-earth"><i />TIERRA</div>
               <div className="planet-label label-mars"><i />MARTE</div>
@@ -104,12 +123,12 @@ function App() {
           <section className="briefing-screen">
             <div className="briefing-screen-heading"><button className="back-button" onClick={() => setScreen('home')}>← VOLVER AL SISTEMA SOLAR</button><span className="section-kicker"><span>02</span> BRIEFING DE CAMPAÑA</span><h1>{mission.name}</h1><p>{mission.id === 'moon' ? 'Llega a la Luna, selecciona un sitio seguro, despliega el rover y entrega un informe geológico al centro de control.' : mission.description}</p></div>
             <div className="briefing-detail-grid">
-              <div className="briefing-detail-scene"><SolarSystemScene mission={mission} onSelect={selectMission} /><div className="detail-target-chip"><i className="live-dot" /> OBJETIVO · {mission.destination.toUpperCase()}</div></div>
+              <div className="briefing-detail-scene"><SolarSystemScene mission={mission} onSelect={selectMission} shipId={shipId} /><div className="detail-target-chip"><i className="live-dot" /> OBJETIVO · {mission.destination.toUpperCase()}</div></div>
               <div className="briefing-detail-card"><span className="eyebrow">ORDEN DE MISIÓN · OC-{String(missionIndex).padStart(3, '0')}</span><h2>{mission.objective}</h2><p>{mission.description}</p><div className="detail-grid-stats"><div><small>FINANCIACIÓN</small><b>{mission.budget} <i>CR</i></b></div><div><small>TIEMPO DE MISIÓN</small><b>{mission.duration}</b></div><div><small>NIVEL DE RIESGO</small><b>{mission.difficulty}</b></div><div><small>CIENCIA POTENCIAL</small><b>+{mission.reward} <i>XP</i></b></div></div><div className="phase-progress"><div><span>PROGRESO DE PREPARACIÓN</span><b>02 / 04</b></div><div className="progress-track"><i /></div><small>BRIEFING COMPLETADO · EXPLORACIÓN 3D DISPONIBLE</small></div><button className="primary-button" onClick={() => setScreen('exploration')}>INICIAR EXPLORACIÓN 3D <b>↗</b></button></div>
             </div>
           </section>
         ) : (
-          <ExplorationScene mission={mission} onExit={() => setScreen('home')} />
+          <ExplorationScene mission={mission} onExit={() => setScreen('home')} shipId={shipId} />
         )}
       </div>
       <footer className="statusbar"><span><i className="live-dot" /> SIMULACIÓN LOCAL</span><span>ORBITAL COMMAND <i>·</i> BUILD 0.1.0</span><span>EDUCATIONAL MODEL <i>·</i> ALL VALUES APPROXIMATE</span></footer>
