@@ -1,0 +1,192 @@
+[
+  {
+    "file": "src/App.tsx",
+    "bytes": 15496,
+    "lines": 169
+  },
+  {
+    "file": "src/components/Commander.tsx",
+    "bytes": 14306,
+    "lines": 196
+  },
+  {
+    "file": "src/components/ExplorationScene.tsx",
+    "bytes": 114217,
+    "lines": 1584
+  },
+  {
+    "file": "src/components/MissionEngineering.tsx",
+    "bytes": 4291,
+    "lines": 28
+  },
+  {
+    "file": "src/components/MissionReports.tsx",
+    "bytes": 7760,
+    "lines": 51
+  },
+  {
+    "file": "src/components/MissionTransit.tsx",
+    "bytes": 8404,
+    "lines": 71
+  },
+  {
+    "file": "src/components/PlanetaryLab.tsx",
+    "bytes": 8518,
+    "lines": 95
+  },
+  {
+    "file": "src/components/RenderSettings.tsx",
+    "bytes": 839,
+    "lines": 8
+  },
+  {
+    "file": "src/components/SceneBoundary.tsx",
+    "bytes": 635,
+    "lines": 10
+  },
+  {
+    "file": "src/components/SolarSystemScene.tsx",
+    "bytes": 16290,
+    "lines": 323
+  },
+  {
+    "file": "src/components/TrackingGlobe.tsx",
+    "bytes": 5268,
+    "lines": 60
+  },
+  {
+    "file": "src/components/commander.css",
+    "bytes": 3912,
+    "lines": 46
+  },
+  {
+    "file": "src/components/mission-systems.css",
+    "bytes": 6273,
+    "lines": 37
+  },
+  {
+    "file": "src/components/observatory.css",
+    "bytes": 3265,
+    "lines": 30
+  },
+  {
+    "file": "src/components/planetary-lab.css",
+    "bytes": 4279,
+    "lines": 13
+  },
+  {
+    "file": "src/components/tracking-globe.css",
+    "bytes": 675,
+    "lines": 2
+  },
+  {
+    "file": "src/data/celestialBodies.ts",
+    "bytes": 2956,
+    "lines": 29
+  },
+  {
+    "file": "src/data/commander.ts",
+    "bytes": 3845,
+    "lines": 39
+  },
+  {
+    "file": "src/data/missions.ts",
+    "bytes": 6631,
+    "lines": 99
+  },
+  {
+    "file": "src/data/planetaryLab.ts",
+    "bytes": 6098,
+    "lines": 65
+  },
+  {
+    "file": "src/data/ships.ts",
+    "bytes": 427,
+    "lines": 7
+  },
+  {
+    "file": "src/main.tsx",
+    "bytes": 238,
+    "lines": 11
+  },
+  {
+    "file": "src/styles.css",
+    "bytes": 35837,
+    "lines": 59
+  },
+  {
+    "file": "src/systems/audio.ts",
+    "bytes": 6177,
+    "lines": 119
+  },
+  {
+    "file": "src/systems/campaign.ts",
+    "bytes": 931,
+    "lines": 14
+  },
+  {
+    "file": "src/systems/communications.ts",
+    "bytes": 1474,
+    "lines": 26
+  },
+  {
+    "file": "src/systems/dataBuffers.ts",
+    "bytes": 913,
+    "lines": 13
+  },
+  {
+    "file": "src/systems/engineering.ts",
+    "bytes": 5105,
+    "lines": 69
+  },
+  {
+    "file": "src/systems/lunarCampaign.ts",
+    "bytes": 6634,
+    "lines": 144
+  },
+  {
+    "file": "src/systems/planetTextures.ts",
+    "bytes": 621,
+    "lines": 16
+  },
+  {
+    "file": "src/systems/playerProgress.ts",
+    "bytes": 1744,
+    "lines": 31
+  },
+  {
+    "file": "src/systems/renderQuality.ts",
+    "bytes": 1193,
+    "lines": 21
+  },
+  {
+    "file": "src/systems/science.ts",
+    "bytes": 7704,
+    "lines": 80
+  },
+  {
+    "file": "src/systems/storage.ts",
+    "bytes": 522,
+    "lines": 13
+  },
+  {
+    "file": "src/systems/transit.ts",
+    "bytes": 4619,
+    "lines": 51
+  },
+  {
+    "file": "src/systems/transitStorage.ts",
+    "bytes": 2309,
+    "lines": 30
+  },
+  {
+    "file": "src/systems/weather.ts",
+    "bytes": 346,
+    "lines": 7
+  },
+  {
+    "file": "src/vite-env.d.ts",
+    "bytes": 38,
+    "lines": 2
+  }
+]

@@ -1,0 +1,33 @@
+/* Observatory identity: deep space, mineral gold, atmospheric blue. */
+:root{--observatory-night:#06101b;--observatory-paper:#e6f0f2;--observatory-sky:#86d7ed;--observatory-mineral:#e5bd80;--observatory-muted:#a3b8c7}
+.observatory-controls{position:absolute;top:65px;left:20px;z-index:4;display:flex;gap:8px;flex-wrap:wrap}
+.observatory-controls button{background:#091725e8;border:1px solid #55788d;color:#e2edf3;padding:9px 12px;border-radius:5px;font:12px system-ui;cursor:pointer}
+.observatory-controls button:first-child{border-color:var(--observatory-mineral);color:#f6d9a8}
+.planet-portrait{margin:8px -12px 18px;position:relative;background:radial-gradient(ellipse at center,#13304480,transparent 70%)}
+.planet-portrait img{width:100%;height:155px;object-fit:contain;display:block}
+.planet-portrait figcaption{text-align:center;color:var(--observatory-muted);font:10px system-ui}
+.render-settings{display:flex;align-items:center;gap:6px;color:#aec5d3;font:11px system-ui}
+.render-settings select,.voice-personality select{background:#102230;color:#e6f0f2;border:1px solid #466476;border-radius:4px;padding:6px;max-width:100%}
+.voice-personality{display:grid;gap:12px;margin:18px 0;padding-top:14px;border-top:1px solid #2c4658}
+.voice-personality label{display:grid;gap:6px;font:13px system-ui;color:#d9e7ef}
+.voice-personality small{color:#a7bfcc;line-height:1.5}
+.voice-personality input{width:100%;accent-color:#86d7ed}
+.app-shell .intro-copy,.app-shell .mission-description{font-size:13px;line-height:1.7;color:#a8becb}
+.app-shell .objective-text{font-size:16px;line-height:1.55}
+.app-shell .mission-copy b{font-size:12px}.app-shell .mission-copy small{font-size:10px}
+.app-shell .mission-card{min-height:66px}
+.app-shell .briefing-column{overflow-y:auto}
+.app-shell .primary-button{min-height:44px}
+.app-shell .mission-column h1{font-size:clamp(26px,2.35vw,36px);line-height:1.2;letter-spacing:-.025em}
+.app-shell .mission-column h1 em{color:inherit;font-style:normal}
+.app-shell :is(button,select,input,a,summary):focus-visible{outline:2px solid #ffd694;outline-offset:3px}
+.app-shell[data-theme="light"] .intro-copy,.app-shell[data-theme="light"] .mission-description{color:#405c70}
+.acquisition-result{position:absolute;right:22px;bottom:86px;z-index:12;max-width:290px;padding:15px 18px;background:#081b29f5;border-left:3px solid #8ce2c1;box-shadow:0 10px 35px #0006;color:#e5f1f5;font:13px system-ui;line-height:1.5;pointer-events:none}
+.acquisition-result strong{display:block;color:#9bf0d2;margin-bottom:6px}.acquisition-result small{display:block;color:#afc4cf;margin-top:6px}
+@media(max-width:1100px){.render-settings>span{display:none}.utc-clock{display:none}}
+@media(max-width:600px){.render-settings select{max-width:88px;font-size:10px}.top-status{display:none}.observatory-controls{top:54px;left:12px;right:12px}.observatory-controls button{font-size:11px;padding:8px}.acquisition-result{right:12px;bottom:116px;max-width:220px;font-size:12px}.voice-personality{gap:8px}.commander-panel{max-height:calc(100dvh - 120px);overflow-y:auto}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
+
+.app-shell .observatory-controls{top:94px}
+@media(max-width:1500px){.app-shell .topbar-center{display:none}}
+@media(max-width:600px){.app-shell .observatory-controls{top:80px}.app-shell .scene-scale{display:none}.app-shell .scene-footer>span:last-child{display:none}.app-shell .brand-mark{flex-shrink:0}}

@@ -1,0 +1,11 @@
+name=ORBITAL COMMAND
+type=app
+runtime=node
+node_major=24
+port=4174
+scheme=http
+host=127.0.0.1
+health_path=/
+install=npm ci
+install_marker=node_modules
+start=node scripts/dev-local.mjs

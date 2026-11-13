@@ -1,4 +1,4 @@
-import { readStorage, writeStorage } from './storage';
+import { readStorage, writeStorage } from './storage.ts';
 
 export type LunarProgress = {
   arrived: boolean;
@@ -43,9 +43,15 @@ export const initialExplorationResources: ExplorationResources = {
 };
 
 export const landingZones = [
-  { id: 'shackleton', name: 'Cráter Shackleton · Polo Sur', description: 'Iluminación permanente en el borde y depósitos de hielo en zonas de sombra.' },
+  { id: 'shackleton', name: 'Cráter Shackleton · Polo Sur', description: 'Algunas zonas del borde reciben iluminación prolongada; las regiones en sombra son de interés para estudiar hielo.' },
   { id: 'mare', name: 'Mare Tranquillitatis', description: 'Llanura basáltica de relieve suave, adecuada para un descenso de prueba.' },
 ] as const;
+const otherLandingZones: Record<string, ReadonlyArray<{ id: string; name: string; description: string }>> = {
+  mars: [{ id: 'delta', name: 'Delta antiguo · Marte', description: 'Región simulada inspirada en depósitos sedimentarios.' }, { id: 'canyon', name: 'Cañón marciano', description: 'Terreno simulado de pendientes y afloramientos.' }],
+  mercury: [{ id: 'caloris', name: 'Cuenca de impacto', description: 'Un módulo robótico explora una región craterizada simulada.' }, { id: 'shadow', name: 'Región polar en sombra', description: 'Área simulada para comparar iluminación y terreno.' }],
+  titan: [{ id: 'dunes', name: 'Campo de dunas · Titán', description: 'Un rover robótico estudia dunas y materiales helados simulados.' }, { id: 'lakes', name: 'Región próxima a lagos', description: 'La sonda observa una representación educativa de hidrocarburos líquidos.' }],
+};
+export function getLandingZones(missionId: string): ReadonlyArray<{ id: string; name: string; description: string }> { return otherLandingZones[missionId] ?? landingZones; }
 
 export const lunarObjectives = [
   { id: 'arrival', label: 'Llegar a la Luna', complete: (progress: LunarProgress) => progress.arrived },
@@ -70,7 +76,7 @@ export function loadLunarProgress(missionId: string): LunarProgress {
     const collectedSamples = Array.isArray(parsed.collectedSamples)
       ? [...new Set(parsed.collectedSamples.filter((index) => Number.isInteger(index) && scannedRocks.includes(index)))]
       : [];
-    const landingZone = landingZones.some((zone) => zone.id === parsed.landingZone) ? parsed.landingZone! : null;
+    const landingZone = getLandingZones(missionId).some((zone) => zone.id === parsed.landingZone) ? parsed.landingZone! : null;
     const arrived = parsed.arrived === true;
     const orbit = arrived && parsed.orbit === true;
     const landed = orbit && Boolean(landingZone) && parsed.landed === true;

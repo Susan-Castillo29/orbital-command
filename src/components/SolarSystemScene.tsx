@@ -1,9 +1,12 @@
+import FullscreenControl from './FullscreenControl';
+import { attachRenderQuality } from '../systems/renderQuality';
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { Mission } from '../data/missions';
 import { celestialBodies } from '../data/celestialBodies';
 import type { ShipId } from '../data/ships';
+import { loadPlanetTexture } from '../systems/planetTextures';
 
 type Props = {
   mission: Mission;
@@ -23,7 +26,7 @@ function makeOrbit(radius: number, color: number, opacity = 0.19) {
   return new THREE.LineLoop(geometry, new THREE.LineBasicMaterial({ color, transparent: true, opacity }));
 }
 
-function createPlanetTexture(base: string, light: string) {
+function createPlanetTexture(base: string, light: string, id: string) {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 256;
@@ -40,7 +43,9 @@ function createPlanetTexture(base: string, light: string) {
     context.fillStyle = i % 2 ? light : '#09111f';
     context.beginPath();
     const y = Math.random() * 256;
-    context.ellipse(Math.random() * 512, y, 35 + Math.random() * 140, 2 + Math.random() * 8, 0, 0, Math.PI * 2);
+    const rocky = id === 'moon' || id === 'asteroid';
+    const radius = 3 + Math.random() * 13;
+    context.ellipse(Math.random() * 512, y, rocky ? radius : 35 + Math.random() * 140, rocky ? radius : 2 + Math.random() * 8, 0, 0, Math.PI * 2);
     context.fill();
   }
   context.globalAlpha = 1;
@@ -100,6 +105,7 @@ export default function SolarSystemScene({ mission, onSelect, shipId }: Props) {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.18;
     host.appendChild(renderer.domElement);
+    const detachQuality = attachRenderQuality(renderer, host);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -107,7 +113,8 @@ export default function SolarSystemScene({ mission, onSelect, shipId }: Props) {
     controls.minDistance = 9;
     controls.maxDistance = 110;
     controls.target.set(0, 0, 0);
-    controls.autoRotate = true;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    controls.autoRotate = !reducedMotion.matches;
     controls.autoRotateSpeed = 0.19;
 
     scene.add(new THREE.AmbientLight(0x9fb7db, 0.7));
@@ -160,7 +167,7 @@ export default function SolarSystemScene({ mission, onSelect, shipId }: Props) {
       const parent = spec.orbitalParent ? bodies.find((body) => body.id === spec.orbitalParent) : undefined;
       (parent?.group ?? scene).add(orbit);
       const group = new THREE.Group();
-      const texture = createPlanetTexture(spec.color, spec.accent);
+      const texture = loadPlanetTexture(spec.id) ?? createPlanetTexture(spec.color, spec.accent, spec.id);
       const planet = new THREE.Mesh(
         new THREE.SphereGeometry(spec.radius, 36, 28),
         new THREE.MeshStandardMaterial({ map: texture, roughness: 0.82, metalness: 0.02 }),
@@ -212,21 +219,35 @@ export default function SolarSystemScene({ mission, onSelect, shipId }: Props) {
     const clickTargets: THREE.Object3D[] = [];
     clickTargets.push(sun);
     bodies.forEach((body) => { const planet = body.group.children[0]; if (planet) clickTargets.push(planet); });
+    let pointerStart = { x: 0, y: 0 };
+    const rememberPointer = (event: PointerEvent) => { pointerStart = { x: event.clientX, y: event.clientY }; };
     const onPointerDown = (event: PointerEvent) => {
+      if (Math.hypot(event.clientX - pointerStart.x, event.clientY - pointerStart.y) > 5) return;
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(pointer, camera);
       const hit = raycaster.intersectObjects(clickTargets, false)[0];
       const id = hit?.object.userData.missionId as string | undefined;
-      if (id && ['sun', 'earth', 'moon', 'mars', 'asteroid', 'jupiter'].includes(id)) selectRef.current(id);
+      if (id) selectRef.current(id);
     };
-    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    renderer.domElement.addEventListener('pointerdown', rememberPointer);
+    renderer.domElement.addEventListener('pointerup', onPointerDown);
 
+    let focused = false;
+    let focusId = '';
+    const targetPosition = new THREE.Vector3();
+    const desiredPosition = new THREE.Vector3();
+    const focusTarget = (event: Event) => { focusId = (event as CustomEvent<string>).detail; focused = true; };
+    const resetView = () => { focused = false; controls.minDistance = 9; camera.position.set(37, 38, 58); controls.target.set(0, 0, 0); };
+    window.addEventListener('orbital-focus-body', focusTarget);
+    window.addEventListener('orbital-overview', resetView);
+    controls.addEventListener('start', () => { focused = false; });
     let animationId = 0;
     const clock = new THREE.Clock();
     const animate = () => {
       animationId = window.requestAnimationFrame(animate);
+      if (document.hidden) { clock.getDelta(); return; }
       const elapsed = clock.getElapsedTime();
       sun.rotation.y = elapsed * 0.045;
       for (const body of bodies) {
@@ -240,6 +261,19 @@ export default function SolarSystemScene({ mission, onSelect, shipId }: Props) {
       ship.rotation.y = -shipAngle + Math.PI / 2;
       sunHalo.scale.setScalar(1 + Math.sin(elapsed * 0.7) * 0.018);
       stars.rotation.y = elapsed * 0.0015;
+      if (focused) {
+        const body = bodies.find((item) => item.id === focusId);
+        const object = focusId === 'sun' ? sun : body?.group;
+        if (object) {
+          object.getWorldPosition(targetPosition);
+          const radius = celestialBodies.find((item) => item.id === focusId)?.radius ?? 1.48;
+          controls.minDistance = radius * 2.1;
+          desiredPosition.copy(targetPosition).add(new THREE.Vector3(0, radius * 2.5, radius * 5.5));
+          camera.position.lerp(desiredPosition, reducedMotion.matches ? 1 : 0.07);
+          controls.target.lerp(targetPosition, reducedMotion.matches ? 1 : 0.07);
+        }
+      }
+      controls.autoRotate = !reducedMotion.matches && !focused;
       controls.update();
       renderer.render(scene, camera);
     };
@@ -258,7 +292,10 @@ export default function SolarSystemScene({ mission, onSelect, shipId }: Props) {
     return () => {
       window.cancelAnimationFrame(animationId);
       resizeObserver.disconnect();
-      renderer.domElement.removeEventListener('pointerdown', onPointerDown);
+      renderer.domElement.removeEventListener('pointerdown', rememberPointer);
+      renderer.domElement.removeEventListener('pointerup', onPointerDown);
+      window.removeEventListener('orbital-focus-body', focusTarget);
+      window.removeEventListener('orbital-overview', resetView);
       controls.dispose();
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh || object instanceof THREE.Points || object instanceof THREE.Line) {
@@ -272,14 +309,15 @@ export default function SolarSystemScene({ mission, onSelect, shipId }: Props) {
           else disposeMaterial(material);
         }
       });
-      renderer.dispose();
+      detachQuality(); renderer.dispose();
       renderer.domElement.remove();
     };
   }, [shipId]);
 
   return (
-    <div className="space-scene" ref={hostRef} aria-label={`Vista 3D del sistema solar; destino seleccionado: ${mission.destination}`}>
-      <div className="scene-topline"><span><i className="live-dot" /> VISUALIZACIÓN EN VIVO</span><span>SECTOR SOL · 01</span></div>
+    <div className="space-scene" data-visualization="solar" ref={hostRef} aria-label={`Vista 3D del sistema solar; destino seleccionado: ${mission.destination}`}>
+      <FullscreenControl label="sistema solar" /><div className="scene-topline"><span><i className="live-dot" /> VISUALIZACIÓN EN VIVO</span><span>SECTOR SOL · 01</span></div>
+      <div className="observatory-controls"><button onClick={() => window.dispatchEvent(new CustomEvent('orbital-focus-body', { detail: mission.targetBodyId }))}>Observar {mission.destination}</button><button onClick={() => window.dispatchEvent(new Event('orbital-overview'))}>Sistema completo</button></div>
       <div className="scene-controls-hint"><span>DRAG <b>ROTAR</b></span><span>SCROLL <b>ZOOM</b></span><span>CLICK <b>SELECCIONAR</b></span></div>
       <div className="scene-scale"><span>ÓRBITAS Y TAMAÑOS DIFERENCIADOS</span><div><i /></div><small>DISTANCIA COMPRIMIDA · TAMAÑO EXAGERADO</small></div>
     </div>

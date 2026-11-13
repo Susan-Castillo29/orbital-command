@@ -1,0 +1,37 @@
+{
+  "@types/three": {
+    "current": "0.177.0",
+    "wanted": "0.177.0",
+    "latest": "0.187.0",
+    "dependent": "orbital-command",
+    "location": "node_modules/@types/three"
+  },
+  "@vitejs/plugin-react": {
+    "current": "4.7.0",
+    "wanted": "4.7.0",
+    "latest": "6.3.0",
+    "dependent": "orbital-command",
+    "location": "node_modules/@vitejs/plugin-react"
+  },
+  "three": {
+    "current": "0.177.0",
+    "wanted": "0.177.0",
+    "latest": "0.187.0",
+    "dependent": "orbital-command",
+    "location": "node_modules/three"
+  },
+  "typescript": {
+    "current": "5.8.3",
+    "wanted": "5.8.3",
+    "latest": "7.0.2",
+    "dependent": "orbital-command",
+    "location": "node_modules/typescript"
+  },
+  "vite": {
+    "current": "6.4.6",
+    "wanted": "6.4.6",
+    "latest": "8.3.8",
+    "dependent": "orbital-command",
+    "location": "node_modules/vite"
+  }
+}

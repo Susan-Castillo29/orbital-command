@@ -49,3 +49,10 @@ button:focus-visible,a:focus-visible,select:focus-visible{outline:2px solid #8ce
 .app-shell[data-theme="light"] .player-wallet b,.app-shell[data-theme="light"] .ship-picker select{color:#1b627f}
 .app-shell[data-theme="light"] .exploration-view{color:#e8edf5}
 @media(max-width:720px){.ship-picker{gap:3px;padding:3px 4px}.ship-picker>span{display:none}.ship-picker select{max-width:66px;font-size:7px}.topbar-right{gap:5px}.landing-overlay{top:15%;padding:13px}}
+
+.systems-loading{flex:1;display:grid;place-items:center;color:#a6dfea;font:11px var(--mono);letter-spacing:.12em;background:#07131f}
+.mission-column .mobile-prepare{display:none}
+@media(max-width:1080px){.mission-column .mobile-prepare{display:flex;margin-top:20px}}
+
+.data-priority{display:grid;gap:5px;margin:10px 0;color:#a9c8d7;font:9px var(--mono);letter-spacing:.06em}
+.data-priority select{width:100%;padding:8px;color:#e5f4fa;background:#0c1d2b;border:1px solid #36596b;border-radius:3px;font:10px var(--mono)}

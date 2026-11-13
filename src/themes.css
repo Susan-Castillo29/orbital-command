@@ -1,0 +1,93 @@
+/* Shared interface tokens. Space imagery retains its astronomical background. */
+.app-shell {
+  --ui-bg:#07111d; --ui-panel:#0c1b29; --ui-raised:#132c3e;
+  --ui-text:#e6f3f8; --ui-muted:#afc5d2; --ui-border:#3d6175;
+  --ui-accent:#8de4fa; --ui-selected:#20485d; --ui-bar:#82dced;
+  --ui-success:#9ce7c7; --ui-warning:#ffcf9c; --ui-focus:#ffd694;
+}
+.app-shell[data-theme='light'] {
+  --ui-bg:#edf3f7; --ui-panel:#ffffff; --ui-raised:#e8f1f7;
+  --ui-text:#183345; --ui-muted:#435f72; --ui-border:#a4bac9;
+  --ui-accent:#075d79; --ui-selected:#cee8f2; --ui-bar:#087d9b;
+  --ui-success:#126441; --ui-warning:#874007; --ui-focus:#075d79;
+  color-scheme:light;
+}
+html[data-theme='light'],html[data-theme='light'] body{background:#edf3f7}
+html[data-theme='dark'],html[data-theme='dark'] body{background:#07111d}
+.app-shell .systems-screen{background:var(--ui-bg);color:var(--ui-text)}
+.app-shell :is(.systems-card,.planetary-lab,.commander-panel,.tracking-globe){background:var(--ui-panel);color:var(--ui-text);border-color:var(--ui-border)}
+.app-shell :is(.systems-heading p,.systems-card p,.systems-card label,.systems-grid small,.systems-reference,.launch-window p,.time-controls span,.criteria-panel,.commander-subtitle,.commander-muted,.commander-settings label,.commander-history,.voice-personality label,.voice-personality small,.lab-controls p,.lab-metric,.tracking-globe small){color:var(--ui-muted)}
+.app-shell :is(.systems-card h2,.systems-card h3,.systems-grid b,.tracking-globe strong,.commander-panel h2,.commander-header strong,.lab-controls strong){color:var(--ui-text)}
+.app-shell :is(.systems-heading>div>span,.systems-card a,.systems-reference a,.report-kicker,.commander-header span,.commander-progress,.planetary-lab header span){color:var(--ui-accent)}
+.app-shell :is(.systems-card select,.systems-card input,.systems-secondary,.time-controls button,.decision-actions button,.report-select,.tracking-stations button,.lab-controls button,.lab-metric select,.voice-personality select,.render-settings select){color:var(--ui-text);background:var(--ui-raised);border-color:var(--ui-border)}
+.app-shell .commander-panel button:not(.commander-header button){color:var(--ui-text);background:var(--ui-raised);border-color:var(--ui-border)}
+.app-shell :is(.commander-toggle,.commander-caption){background:var(--ui-panel);color:var(--ui-text);border-color:var(--ui-accent)}
+.app-shell .commander-caption strong,.app-shell .commander-header button{color:var(--ui-accent)}
+.app-shell .render-settings{color:var(--ui-muted)}
+.app-shell .systems-grid{background:var(--ui-border);border-color:var(--ui-border)}
+.app-shell .systems-grid>div{background:var(--ui-panel)}
+.app-shell :is(.report-network,.report-chart>div>div){background:var(--ui-raised);border-color:var(--ui-accent)}
+.app-shell .report-chart>div{color:var(--ui-text)}
+.app-shell .report-chart i{background:var(--ui-bar)}
+.app-shell :is(.report-select,.tracking-stations button,.lab-controls button,.time-controls button)[aria-pressed='true']{background:var(--ui-selected);color:var(--ui-text);border-color:var(--ui-accent);box-shadow:inset 3px 0 var(--ui-accent)}
+.app-shell .systems-primary{background:var(--ui-accent);color:var(--ui-bg);border-color:var(--ui-accent)}
+.app-shell .systems-alert,.app-shell .systems-warning{color:var(--ui-warning)}
+.app-shell .systems-ok{color:var(--ui-success)}
+.app-shell .lab-disclaimer{color:var(--ui-muted)!important}
+.app-shell :is(button,select,input,a,summary):focus-visible{outline-color:var(--ui-focus)}
+.app-shell[data-theme='light'] :is(.section-kicker,.eyebrow,.section-heading,.catalog-footer,.scroll-hint,.briefing-stats span,.briefing-stats b,.briefing-number,.save-indicator,.detail-grid-stats,.phase-progress,.back-button,.rail-button,.rail-avatar,.brand-name small){color:var(--ui-muted)}
+.app-shell[data-theme='light'] :is(.briefing-note,.briefing-detail-card,.player-wallet){background:var(--ui-raised);color:var(--ui-text);border-color:var(--ui-border)}
+.app-shell[data-theme='light'] :is(.briefing-note p,.briefing-detail-card p,.briefing-detail-card small,.briefing-detail-card b,.briefing-detail-card h2){color:var(--ui-text)}
+.app-shell[data-theme='light'] .rail-button.active{background:var(--ui-selected);color:var(--ui-accent)}
+.app-shell[data-theme='light'] .statusbar{background:var(--ui-panel);color:var(--ui-muted)}
+.app-shell[data-theme='light'] .difficulty{color:#245d41;border-color:#709d83;background:#e5f3e9}
+.app-shell[data-theme='light'] .toast{background:var(--ui-panel);color:var(--ui-text);border-color:var(--ui-border)}
+/* Reports get the full web workspace, not two cramped equal cards. */
+.app-shell .reports-screen{padding:clamp(24px,3vw,56px);padding-bottom:110px;font-size:18px;line-height:1.65;scroll-padding-top:24px}
+.app-shell .reports-screen .systems-heading{max-width:1600px;margin-bottom:36px}
+.app-shell .reports-screen .systems-heading h1{font-size:clamp(34px,3.5vw,56px);line-height:1.15}
+.app-shell .reports-screen .systems-heading p{font-size:18px;max-width:900px}
+.app-shell .reports-screen .systems-heading span{font-size:13px}
+.app-shell .reports-layout{max-width:1600px;grid-template-columns:minmax(290px,350px) minmax(0,1fr);gap:28px;align-items:start}
+.app-shell .reports-layout.is-empty{grid-template-columns:minmax(0,1fr);max-width:1200px}
+.app-shell .reports-screen .systems-card{min-width:0;padding:clamp(20px,2.2vw,36px);border-radius:12px}
+.app-shell .reports-screen .systems-card h2{font-size:clamp(24px,2vw,32px);line-height:1.3;margin-bottom:24px;overflow-wrap:anywhere}
+.app-shell .reports-screen .systems-card h3{font-size:22px;line-height:1.4;margin:32px 0 10px}
+.app-shell .reports-screen :is(.systems-card p,.systems-card a,.criteria-panel){font-size:18px;line-height:1.7;overflow-wrap:anywhere}
+.app-shell .reports-screen .report-note{font-size:16px!important}
+.app-shell .reports-screen :is(.report-kicker,.tracking-globe small){font-size:14px;line-height:1.6}
+.app-shell .reports-screen :is(.systems-secondary,.report-select,.tracking-stations button){font-size:16px;min-height:48px;line-height:1.5;letter-spacing:0;padding:12px 16px}
+.app-shell .reports-screen .report-select{border-radius:6px;overflow-wrap:anywhere}
+.app-shell .reports-screen .report-chart{margin:26px 0;padding:20px;background:var(--ui-bg);border-radius:8px}
+.app-shell .reports-screen .report-chart>div{font-size:16px;grid-template-columns:minmax(130px,1fr) minmax(60px,1fr) 42px;gap:16px;margin:18px 0}
+.app-shell .reports-screen .report-chart>div>div,.app-shell .reports-screen .report-chart i{height:14px;border-radius:8px}
+.app-shell .reports-screen .tracking-canvas{height:300px}
+.app-shell .reports-screen .tracking-globe{padding:12px}
+.app-shell .reports-screen .tracking-globe strong{font-size:18px;line-height:1.5}
+.app-shell .reports-screen .report-network{padding:16px 12px}
+.app-shell .reports-screen .criteria-panel summary{padding:12px 0;min-height:48px}
+.app-shell .reports-layout.is-empty .report-network{max-width:850px;margin-inline:auto}
+@media(min-width:1800px){.app-shell .reports-layout{grid-template-columns:400px minmax(0,1fr)}}
+@media(max-width:1050px){.app-shell .reports-layout{grid-template-columns:minmax(0,1fr)}.app-shell .reports-layout.has-report>.systems-card:first-child{display:contents}.app-shell .reports-layout.has-report>.systems-card:first-child>.report-network,.app-shell .reports-layout.has-report>.systems-card:first-child>.criteria-panel{order:2}.app-shell .reports-layout.has-report .report-document{order:1}.app-shell .reports-screen .tracking-canvas{height:340px}}
+@media(max-width:600px){.app-shell .reports-screen{padding:24px 16px 110px;font-size:16px}.app-shell .reports-screen :is(.systems-heading p,.systems-card p,.systems-card a,.criteria-panel){font-size:16px}.app-shell .reports-screen .systems-card{padding:20px 16px}.app-shell .reports-screen .systems-card h3{font-size:20px}.app-shell .reports-screen .report-chart{padding:12px}.app-shell .reports-screen .report-chart>div{grid-template-columns:minmax(0,1fr) 38px;gap:8px}.app-shell .reports-screen .report-chart>div>span{grid-column:1/-1}.app-shell .reports-screen .tracking-canvas{height:260px}}
+/* Fullscreen is native: resize observers update the existing WebGL canvases. */
+.fullscreen-control{position:relative;z-index:25;display:flex;justify-content:flex-end;gap:8px;margin-bottom:12px}
+.app-shell .fullscreen-control button{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:10px 14px;border:1px solid var(--ui-border);border-radius:6px;background:var(--ui-panel);color:var(--ui-text);font:600 14px/1.3 system-ui;cursor:pointer}
+.fullscreen-control button>span{font-size:20px}
+.fullscreen-error{max-width:300px;font:14px/1.5 system-ui;color:var(--ui-warning)}
+.space-scene>.fullscreen-control{position:absolute;top:94px;right:20px}
+.exploration-view>.fullscreen-control{position:absolute;bottom:22px;left:50%;transform:translateX(-50%)}
+.app-shell [data-visualization]:fullscreen{width:100vw!important;height:100dvh!important;max-width:none!important;max-height:none!important;margin:0!important;box-sizing:border-box;overflow:auto;background:var(--ui-bg);color:var(--ui-text);border:0;border-radius:0}
+.app-shell .space-scene:fullscreen,.app-shell .exploration-view:fullscreen{overflow:hidden;background:#030811}
+.app-shell .tracking-globe:fullscreen{display:flex;flex-direction:column;padding:24px clamp(20px,5vw,100px)}
+.app-shell .tracking-globe:fullscreen .tracking-canvas{flex:1;min-height:40vh;height:auto}
+.app-shell .tracking-globe:fullscreen .tracking-stations{justify-content:center}
+.app-shell .planetary-lab:fullscreen{padding:24px clamp(20px,4vw,80px)}
+.app-shell .planetary-lab:fullscreen .lab-model{height:calc(100dvh - 200px);min-height:350px}
+.app-shell .report-chart>.fullscreen-control{display:flex;grid-template-columns:none;margin:0 0 24px}
+.app-shell .report-chart:fullscreen{padding:clamp(24px,6vw,100px);display:flex;flex-direction:column;justify-content:center;gap:24px}
+.app-shell .report-chart:fullscreen>.fullscreen-control{position:absolute;right:24px;top:24px}
+.app-shell .report-chart:fullscreen>div:not(.fullscreen-control){font-size:clamp(18px,2vw,28px);gap:24px}
+.app-shell .report-chart:fullscreen>div>div,.app-shell .report-chart:fullscreen i{height:28px}
+@media(max-width:1100px){.space-scene>.fullscreen-control{top:auto;bottom:90px;right:16px}}
+@media(max-width:600px){.app-shell .fullscreen-control button{font-size:12px;padding:8px 10px}.app-shell .planetary-lab:fullscreen .lab-model{height:45vh;min-height:260px}.exploration-view>.fullscreen-control{left:auto;right:12px;bottom:70px;transform:none}.app-shell .report-chart:fullscreen>div:not(.fullscreen-control){font-size:18px}}

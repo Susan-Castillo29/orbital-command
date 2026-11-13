@@ -1,0 +1,36 @@
+.systems-screen { flex: 1; min-width: 0; overflow-y: auto; padding: clamp(24px, 4vw, 60px); color: #e6f3f8; background: radial-gradient(circle at 85% 5%, #173147, #07111d 45%); }
+.systems-heading { max-width: 1180px; margin: 0 auto 30px; display: flex; align-items: start; justify-content: space-between; gap: 24px; }
+.systems-heading span { color: #74d8ed; font-size: 11px; font-weight: 700; letter-spacing: .16em; }
+.systems-heading h1 { margin: 13px 0 10px; font-size: clamp(30px, 4vw, 52px); letter-spacing: -.03em; }
+.systems-heading p { max-width: 690px; margin: 0; color: #9eb6c6; line-height: 1.6; font-size: 14px; }
+.engineering-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1180px; margin: auto; }
+.systems-card { padding: 25px; border: 1px solid #244257; border-radius: 6px; background: #0c1b29eF; }
+.systems-card h2 { margin: 0 0 20px; font-size: 20px; }
+.systems-card label { display: grid; gap: 7px; margin: 0 0 16px; color: #a8c1d0; font-size: 12px; }
+.systems-card select, .systems-card input[type='number'] { width: 100%; padding: 12px; border: 1px solid #35596a; border-radius: 3px; color: #e8f6fa; background: #10283a; font: inherit; }
+.systems-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: #274356; border: 1px solid #274356; }
+.systems-grid > div { min-width: 0; padding: 14px; background: #0d1d2a; }
+.systems-grid small { display: block; color: #92aebd; font-size: 10px; letter-spacing: .06em; }
+.systems-grid b { display: block; margin-top: 8px; color: #e7f7ff; font-size: 15px; overflow-wrap: anywhere; }
+.systems-primary, .systems-secondary, .time-controls button, .decision-actions button { padding: 12px 16px; border: 1px solid #448da2; border-radius: 3px; color: #c8f6ff; background: #123548; cursor: pointer; font-family: inherit; font-size: 11px; font-weight: 700; line-height: 1.3; letter-spacing: .05em; }
+.systems-primary { display: block; width: 100%; margin-top: 20px; color: #061722; background: #78d8ec; border-color: #78d8ec; }
+.systems-primary:disabled, .decision-actions button:disabled { opacity: .45; cursor: not-allowed; }
+.systems-alert { margin: 16px 0; padding: 15px; border-left: 3px solid #ffab70; background: #4b2d251f; color: #ffcfab; font-size: 13px; line-height: 1.5; }
+.systems-alert p, .systems-warning { margin: 8px 0; line-height: 1.5; }
+.systems-warning { color: #eacb8f; font-size: 12px; }
+.systems-ok { color: #86e2c0; font-size: 13px; }
+.transit-screen > .systems-card { max-width: 1180px; margin: 0 auto; }
+.transit-screen .systems-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.transit-visual { position: relative; overflow: hidden; height: 170px; max-width: 1180px; margin: 0 auto 20px; border: 1px solid #244257; border-radius: 6px; background: radial-gradient(circle at 85% 50%, #1d546c, #081725 26%, #030811 65%); }
+.transit-orbit { position: absolute; right: -55px; top: -160px; width: 470px; height: 470px; border: 1px solid #5cb5cf44; border-radius: 50%; }
+.transit-planet { position: absolute; right: 8%; top: 30px; color: #bdefff; font-size: 74px; text-shadow: 0 0 40px #4b9dc4; }
+.transit-route { position: absolute; bottom: 25px; left: 5%; right: 5%; display: flex; align-items: center; gap: 14px; color: #b2d3e2; font-size: 10px; letter-spacing: .08em; }
+.transit-route div { flex: 1; height: 3px; background: #3c6270; }.transit-route i { display: block; height: 100%; background: #8feaff; }
+.launch-window { margin-top: 20px; }.launch-window label { max-width: 300px; }.launch-window p, .systems-reference { color: #99b4c0; font-size: 12px; line-height: 1.5; }
+.launch-countdown { margin-top: 14px; display: flex; align-items: center; justify-content: center; gap: 18px; min-height: 90px; border: 1px solid #46748c; background: radial-gradient(circle at 50% 100%, #78432b, #0b1e2c 65%); color: #f4fbff; }.launch-countdown strong { font-size: 28px; }.launch-countdown small { color: #a9c3d0; font-size: 10px; letter-spacing: .1em; }.launch-rocket { color: #dceef3; font-size: 35px; text-shadow: 0 12px 12px #ff9a57; animation: launch-pulse .7s ease-in-out infinite alternate; }@keyframes launch-pulse { to { transform: translateY(-5px); text-shadow: 0 20px 14px #ff6c34; } }@media (prefers-reduced-motion: reduce) { .launch-rocket { animation: none; } }
+.systems-reference a { color: #85d9ee; }.time-controls, .decision-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 20px; }.time-controls span { color: #a7c6d5; font-size: 11px; margin-right: auto; }.time-controls button[aria-pressed='true'] { color: #071923; background: #81def0; }
+.systems-screen button:focus-visible, .systems-screen select:focus-visible, .systems-screen input:focus-visible { outline: 2px solid #b9f4ff; outline-offset: 3px; }
+@media (max-width: 800px) { .engineering-layout { grid-template-columns: 1fr; }.transit-screen .systems-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.systems-heading { flex-direction: column; } }
+.report-select { display: block; width: 100%; margin: 8px 0; padding: 12px; border: 1px solid #345569; color: #d1eaf2; background: #10283a; text-align: left; cursor: pointer; }.report-select[aria-pressed='true'] { border-color: #7adbf0; background: #164055; }
+.criteria-panel { margin-top: 22px; color: #b6dce8; font-size: 13px; }.criteria-panel summary { cursor: pointer; font-weight: 700; }.criteria-panel ol { padding-left: 20px; }.criteria-panel li { margin: 15px 0; }.criteria-panel p { margin: 4px 0; }
+.report-network { margin-top: 26px; padding: 16px; border-left: 3px solid #77d3ed; background: #102b3c; }.report-network p, .systems-card article p, .systems-card p { color: #adc2cc; line-height: 1.6; font-size: 13px; }.report-kicker { color: #77d3ed; font-size: 10px; letter-spacing: .12em; }.systems-card h3 { margin: 20px 0 5px; color: #e1f3f8; font-size: 14px; }.systems-card a { color: #8de4fa; font-size: 13px; }.report-note { font-size: 11px !important; }.report-chart > div { display: grid; grid-template-columns: 1fr 1fr 28px; gap: 10px; align-items: center; margin: 10px 0; color: #c7dce4; font-size: 11px; }.report-chart > div > div { height: 7px; background: #294759; }.report-chart i { display: block; height: 7px; background: #80daeb; }

@@ -1,3 +1,5 @@
+import FullscreenControl from './FullscreenControl';
+import { attachRenderQuality } from '../systems/renderQuality';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import * as THREE from 'three';
 import type { Mission } from '../data/missions';
@@ -5,7 +7,7 @@ import { celestialBodies } from '../data/celestialBodies';
 import {
   initialExplorationResources,
   initialLunarProgress,
-  landingZones,
+  getLandingZones,
   loadExplorationResources,
   loadLunarProgress,
   lunarObjectives,
@@ -16,16 +18,26 @@ import {
 import type { ExplorationResources, LunarProgress } from '../systems/lunarCampaign';
 import { readStorage, writeStorage, removeStorage } from '../systems/storage';
 import { awardMission } from '../systems/playerProgress';
-import { playSound } from '../systems/audio';
+import { playSound, startEngine, stopEngine } from '../systems/audio';
 import type { ShipId } from '../data/ships';
+import { hulls, instruments, radios, type MissionDesign } from '../systems/engineering';
+import type { TransitState } from '../systems/transit';
+import { createScienceReport, saveReport } from '../systems/science';
+import PlanetaryLab from './PlanetaryLab';
+import type { LabReading } from '../data/planetaryLab';
+import { loadPlanetTexture } from '../systems/planetTextures';
+import { compressedTransmissionSeconds, estimatedSignalSeconds } from '../systems/communications';
+import { isSimulatedDustStorm } from '../systems/weather';
+import { addBufferedData, emptyDataBuffers, totalBuffered, transmitBufferedData, type DataBuffers, type DataKind } from '../systems/dataBuffers';
 
 type Mode = 'flight' | 'orbit' | 'surface';
 type PointOfInterest = { object: THREE.Group; kind: 'rock' | 'station'; index: number; name: string; position: THREE.Vector3 };
 type BodyRuntime = { data: (typeof celestialBodies)[number]; group: THREE.Group; mesh: THREE.Mesh; material: THREE.MeshStandardMaterial; orbitRadius: number; phase: number; angularSpeed: number };
 type TutorialStep = { id: string; title: string; instruction: string };
 type OrbitalSurvey = { arrived: boolean; scannedRegions: number[]; transmitted: boolean };
+type SurfaceSensor = { x: number; z: number };
 
-type Props = { mission: Mission; onExit: () => void; shipId: ShipId };
+type Props = { mission: Mission; onExit: () => void; shipId: ShipId; design: MissionDesign; arrival: TransitState | null };
 
 const tutorialOrder = ['travel', 'landing-zone', 'land', 'surface', 'scan', 'sample', 'station', 'recharge', 'analyze', 'antenna', 'transmit', 'complete'];
 const emptyOrbitalSurvey: OrbitalSurvey = { arrived: false, scannedRegions: [], transmitted: false };
@@ -37,6 +49,11 @@ const orbitalRegions: Record<string, string[]> = {
   saturn: ['Anillo A', 'División de Cassini', 'Anillo E'],
   jupiter: ['Gran Mancha Roja', 'Banda ecuatorial', 'Tormenta polar'],
   sun: ['Corona solar', 'Arco magnético', 'Eyección de masa coronal'],
+  mercury: ['Cráter de impacto', 'Llanura iluminada', 'Región polar en sombra'],
+  venus: ['Nubes altas', 'Hemisferio nocturno', 'Patrón atmosférico'],
+  titan: ['Nubes de metano', 'Región de lagos', 'Dunas ecuatoriales'],
+  uranus: ['Atmósfera polar', 'Nubes altas', 'Entorno magnético'],
+  neptune: ['Tormenta oscura', 'Nubes altas', 'Entorno de Tritón'],
 };
 
 function loadOrbitalSurvey(missionId: string): OrbitalSurvey {
@@ -53,8 +70,47 @@ function loadOrbitalSurvey(missionId: string): OrbitalSurvey {
   }
 }
 
-function terrainHeight(x: number, z: number) {
-  const craters = [[-18, -12, 4], [16, -18, 5], [21, 15, 3.5], [-22, 18, 6], [3, 25, 4]];
+function loadLabReadings(missionId: string): LabReading[] {
+  try {
+    const parsed: unknown = JSON.parse(readStorage(`orbital-command-lab-${missionId}`) ?? '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is LabReading => Boolean(item && typeof item.region === 'string' && typeof item.label === 'string' && typeof item.unit === 'string' && typeof item.value === 'number' && Number.isFinite(item.value))).slice(0, 24);
+  } catch { return []; }
+}
+
+function loadSurfaceSensors(missionId: string): SurfaceSensor[] {
+  try {
+    const parsed: unknown = JSON.parse(readStorage(`orbital-command-sensors-${missionId}`) ?? '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is SurfaceSensor => Boolean(item && typeof item.x === 'number' && typeof item.z === 'number' && Number.isFinite(item.x) && Number.isFinite(item.z) && Math.abs(item.x) <= 42 && Math.abs(item.z) <= 42)).slice(0, 3);
+  } catch { return []; }
+}
+function loadDataBuffers(missionId: string, storage: number, freshArrival: boolean): DataBuffers {
+  const fallback = { ...emptyDataBuffers(), telemetry: storage };
+  if (freshArrival) return fallback;
+  try {
+    const saved: unknown = JSON.parse(readStorage(`orbital-command-buffers-${missionId}`) ?? 'null');
+    if (!saved || typeof saved !== 'object') return fallback;
+    const candidate = saved as Partial<DataBuffers>;
+    if (['observations', 'sensors', 'telemetry'].some((key) => {
+      const value = candidate[key as DataKind];
+      return typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100;
+    })) return fallback;
+    const buffers = candidate as DataBuffers;
+    return Math.abs(totalBuffered(buffers) - storage) < 0.01 ? buffers : fallback;
+  } catch { return fallback; }
+}
+function loadMissionEvents(missionId: string): string[] {
+  try {
+    const parsed: unknown = JSON.parse(readStorage(`orbital-command-events-${missionId}`) ?? '[]');
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string').slice(0, 20) : [];
+  } catch { return []; }
+}
+
+function terrainHeight(x: number, z: number, bodyId = 'moon') {
+  if (bodyId === 'mars') return Math.sin(x * 0.12) * 0.9 + Math.sin(z * 0.2) * 0.35 - 2.2 * Math.exp(-((x + z * 0.3) ** 2) / 35);
+  if (bodyId === 'titan') return Math.sin(x * 0.2 + z * 0.04) * 0.8 + Math.sin(x * 0.08) * 0.5;
+  const craters = bodyId === 'mercury' ? [[-18, -12, 7], [16, -18, 8], [21, 15, 5], [-22, 18, 8], [3, 25, 6], [0, 0, 3], [-8, 9, 4]] : [[-18, -12, 4], [16, -18, 5], [21, 15, 3.5], [-22, 18, 6], [3, 25, 4]];
   let height = Math.sin(x * 0.16) * Math.cos(z * 0.13) * 0.22 + Math.sin((x + z) * 0.31) * 0.08;
   for (const [cx, cz, radius] of craters) {
     const distance = Math.hypot(x - cx, z - cz);
@@ -64,7 +120,25 @@ function terrainHeight(x: number, z: number) {
   return height;
 }
 
-function createSurface() {
+function makeTerrainTexture(bodyId: string, color: string) {
+  const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512;
+  const context = canvas.getContext('2d');
+  if (!context) return null;
+  context.fillStyle = color; context.fillRect(0, 0, canvas.width, canvas.height);
+  for (let i = 0; i < 8500; i += 1) {
+    const shade = Math.random() > 0.5 ? '255,221,179' : '35,18,15';
+    context.fillStyle = `rgba(${shade},${0.03 + Math.random() * 0.12})`;
+    const size = 0.5 + Math.random() * (bodyId === 'titan' ? 3 : 2);
+    context.fillRect(Math.random() * 512, Math.random() * 512, size, size);
+  }
+  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping; texture.repeat.set(4, 4);
+  return texture;
+}
+
+function createSurface(bodyId: string) {
+  const heightAt = (x: number, z: number) => terrainHeight(x, z, bodyId);
+  const surfaceColor = bodyId === 'mars' ? '#a84f35' : bodyId === 'mercury' ? '#716861' : bodyId === 'titan' ? '#997041' : '#777a80';
   const root = new THREE.Group();
   const size = 90;
   const segments = 120;
@@ -73,10 +147,11 @@ function createSurface() {
   for (let i = 0; i < positions.count; i += 1) {
     const x = positions.getX(i);
     const y = positions.getY(i);
-    positions.setZ(i, terrainHeight(x, y));
+    positions.setZ(i, heightAt(x, y));
   }
   geometry.computeVertexNormals();
-  const terrainMaterial = new THREE.MeshStandardMaterial({ color: '#777a80', roughness: 1, metalness: 0.02 });
+  const terrainTexture = makeTerrainTexture(bodyId, surfaceColor);
+  const terrainMaterial = new THREE.MeshStandardMaterial({ color: terrainTexture ? '#ffffff' : surfaceColor, map: terrainTexture, roughness: 1, metalness: 0.02 });
   const terrain = new THREE.Mesh(geometry, terrainMaterial);
   terrain.rotation.x = -Math.PI / 2;
   terrain.position.y = -0.3;
@@ -90,7 +165,7 @@ function createSurface() {
     const x = Math.cos(angle) * distance;
     const z = Math.sin(angle) * distance;
     const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.18 + Math.random() * 0.7, 0), rockMaterial);
-    rock.position.set(x, terrainHeight(x, z) + 0.05, z);
+    rock.position.set(x, heightAt(x, z) + 0.05, z);
     rock.rotation.set(Math.random() * 2, Math.random() * 2, Math.random() * 2);
     rock.scale.set(1 + Math.random(), 0.55 + Math.random() * 0.5, 0.8 + Math.random());
     root.add(rock);
@@ -100,7 +175,7 @@ function createSurface() {
   const sampleLocations: Array<[number, number]> = [[-11, -7], [10, -5], [4, 13]];
   sampleLocations.forEach(([x, z], index) => {
     const point = new THREE.Group();
-    point.position.set(x, terrainHeight(x, z), z);
+    point.position.set(x, heightAt(x, z), z);
     point.userData.poiIndex = index;
     const beacon = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), new THREE.MeshStandardMaterial({ color: '#8de8ff', emissive: '#12728a', emissiveIntensity: 1.4 }));
     beacon.position.y = 1.35;
@@ -110,12 +185,13 @@ function createSurface() {
     ring.position.y = 0.15;
     point.add(ring);
     root.add(point);
-    points.push({ object: point, kind: 'rock', index, name: ['Basalto vesicular', 'Brecha de impacto', 'Regolito polar'][index], position: point.position.clone() });
+    const names = bodyId === 'mars' ? ['Estrato sedimentario', 'Afloramiento rojizo', 'Roca del antiguo delta'] : bodyId === 'mercury' ? ['Brecha craterizada', 'Llanura rocosa', 'Regolito polar'] : bodyId === 'titan' ? ['Duna orgánica', 'Canto de hielo', 'Depósito cercano al lago'] : ['Basalto vesicular', 'Brecha de impacto', 'Regolito polar'];
+    points.push({ object: point, kind: 'rock', index, name: names[index], position: point.position.clone() });
   });
 
   const station = new THREE.Group();
   station.userData.poiIndex = 3;
-  station.position.set(-1, terrainHeight(-1, -18), -18);
+  station.position.set(-1, heightAt(-1, -18), -18);
   const stationBase = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.4, 0.5, 8), new THREE.MeshStandardMaterial({ color: '#d8e6ee', metalness: 0.5, roughness: 0.45 }));
   stationBase.position.y = 0.25;
   station.add(stationBase);
@@ -144,25 +220,43 @@ function createSurface() {
       rover.add(wheel);
     }
   }
-  rover.position.set(0, terrainHeight(0, 0), 0);
+  rover.position.set(0, heightAt(0, 0), 0);
   root.add(rover);
+  const astronaut = new THREE.Group();
+  const suitMaterial = new THREE.MeshStandardMaterial({ color: '#d9e5e9', roughness: 0.7 });
+  const suit = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.55, 4, 10), suitMaterial); suit.position.y = 1; astronaut.add(suit);
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.31, 16, 12), new THREE.MeshStandardMaterial({ color: '#e9f2f4', metalness: 0.3, roughness: 0.4 })); helmet.position.y = 1.75; astronaut.add(helmet);
+  const visor = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 8), new THREE.MeshStandardMaterial({ color: '#d8a449', metalness: 0.8, roughness: 0.2 })); visor.position.set(0, 1.77, -0.19); astronaut.add(visor);
+  for (const side of [-1, 1]) { const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.1, 0.42, 4, 8), suitMaterial); leg.position.set(side * 0.16, 0.36, 0); astronaut.add(leg); }
+  astronaut.visible = false; root.add(astronaut);
+  if (bodyId === 'titan') {
+    const lake = new THREE.Mesh(new THREE.CircleGeometry(7, 40), new THREE.MeshStandardMaterial({ color: '#283943', roughness: 0.2, metalness: 0.15 }));
+    lake.rotation.x = -Math.PI / 2; lake.position.set(25, heightAt(25, 20) + 0.05, 20); root.add(lake);
+  }
+  if (bodyId === 'mars') {
+    const dust = new Float32Array(220 * 3);
+    for (let i = 0; i < dust.length; i += 3) { dust[i] = (Math.random() - 0.5) * 85; dust[i + 1] = 1 + Math.random() * 8; dust[i + 2] = (Math.random() - 0.5) * 85; }
+    const dustGeometry = new THREE.BufferGeometry(); dustGeometry.setAttribute('position', new THREE.BufferAttribute(dust, 3));
+    root.add(new THREE.Points(dustGeometry, new THREE.PointsMaterial({ color: '#eab18b', size: 0.18, transparent: true, opacity: 0.5 })));
+  }
   const setZone = (zoneId: string) => {
-    const locations: Array<[number, number]> = zoneId === 'mare'
+    const alternate = ['mare', 'canyon', 'shadow', 'lakes'].includes(zoneId);
+    const locations: Array<[number, number]> = alternate
       ? [[-15, -3], [8, -13], [14, 12]]
       : [[-11, -7], [10, -5], [4, 13]];
     locations.forEach(([x, z], index) => {
       const point = points[index];
-      point.object.position.set(x, terrainHeight(x, z), z);
+      point.object.position.set(x, heightAt(x, z), z);
       point.position.copy(point.object.position);
     });
-    const stationX = zoneId === 'mare' ? 1 : -1;
-    const stationZ = zoneId === 'mare' ? -20 : -18;
-    station.position.set(stationX, terrainHeight(stationX, stationZ), stationZ);
+    const stationX = alternate ? 1 : -1;
+    const stationZ = alternate ? -20 : -18;
+    station.position.set(stationX, heightAt(stationX, stationZ), stationZ);
     points[3].position.copy(station.position);
-    rover.position.set(0, terrainHeight(0, 0), 0);
-    terrainMaterial.color.set(zoneId === 'mare' ? '#817565' : '#777a80');
+    rover.position.set(0, heightAt(0, 0), 0);
+    terrainMaterial.color.set(terrainTexture ? '#ffffff' : bodyId === 'moon' && zoneId === 'mare' ? '#817565' : surfaceColor);
   };
-  return { root, rover, points, setZone };
+  return { root, rover, astronaut, points, setZone };
 }
 
 function makeShip(shipId: ShipId) {
@@ -210,24 +304,38 @@ function getTutorialStep(progress: LunarProgress, mode: Mode, resources: Explora
   return { id: 'complete', title: 'Misión completada', instruction: 'La ciencia lunar llegó al centro de control. ¡Buen trabajo, comandante!' };
 }
 
-export default function ExplorationScene({ mission, onExit, shipId }: Props) {
+export default function ExplorationScene({ mission, onExit, shipId, design, arrival }: Props) {
+  const supportsSurface = ['moon', 'mars', 'mercury', 'titan'].includes(mission.id);
+  const landingZones = getLandingZones(mission.id);
   const hostRef = useRef<HTMLDivElement>(null);
   const cockpitRef = useRef(false);
   const resourceWarningRef = useRef(false);
   const [progress, setProgress] = useState<LunarProgress>(() => loadLunarProgress(mission.id));
   const [orbitalSurvey, setOrbitalSurvey] = useState<OrbitalSurvey>(() => loadOrbitalSurvey(mission.id));
   const [samplesJustCompleted, setSamplesJustCompleted] = useState(false);
-  const [resources, setResources] = useState<ExplorationResources>(() => loadExplorationResources(mission.id));
+  const [resources, setResources] = useState<ExplorationResources>(() => arrival ? { fuel: arrival.fuel, energy: arrival.energy, integrity: arrival.integrity, storage: arrival.data, communications: 100, elapsedMinutes: arrival.elapsedDays * 1440 } : loadExplorationResources(mission.id));
+  const [buffers, setBuffers] = useState<DataBuffers>(() => loadDataBuffers(mission.id, resources.storage, Boolean(arrival)));
+  const [dataPriority, setDataPriority] = useState<DataKind>('observations');
   const [mode, setMode] = useState<Mode>('flight');
   const [landingInProgress, setLandingInProgress] = useState(false);
   const [selectedId, setSelectedId] = useState(mission.targetBodyId);
   const [hazardWarning, setHazardWarning] = useState('');
-  const [landingZoneId, setLandingZoneId] = useState(() => loadLunarProgress(mission.id).landingZone ?? 'shackleton');
+  const [landingZoneId, setLandingZoneId] = useState(() => loadLunarProgress(mission.id).landingZone ?? landingZones[0].id);
   const [selectedPoi, setSelectedPoi] = useState<{ index: number; kind: 'rock' | 'station'; name: string } | null>(null);
   const [atStation, setAtStation] = useState(false);
   const [transmissionCountdown, setTransmissionCountdown] = useState(0);
+  const [windowCooldown, setWindowCooldown] = useState(0);
   const [transmissionType, setTransmissionType] = useState<'lunar' | 'orbital' | null>(null);
   const [confirmRestart, setConfirmRestart] = useState(false);
+  const [labOpen, setLabOpen] = useState(false);
+  const [acquisition, setAcquisition] = useState<{ energy: number; data: number } | null>(null);
+  const [firstLook, setFirstLook] = useState(() => Boolean(arrival && mission.id === 'earth' && readStorage('orbital-command-first-look-v1') !== 'done'));
+  const [onFoot, setOnFoot] = useState(false);
+  const [labReadings, setLabReadings] = useState<LabReading[]>(() => loadLabReadings(mission.id));
+  const [photoCount, setPhotoCount] = useState(() => { const saved = Number(readStorage(`orbital-command-photos-${mission.id}`)); return Number.isInteger(saved) && saved >= 0 && saved <= 1000 ? saved : 0; });
+  const [sensors, setSensors] = useState<SurfaceSensor[]>(() => loadSurfaceSensors(mission.id));
+  const [satelliteDeployed, setSatelliteDeployed] = useState(() => mission.id === 'earth' && readStorage('orbital-command-satellite-earth') === 'done');
+  const [dustStorm, setDustStorm] = useState(false);
   const [tutorialDismissed, setTutorialDismissed] = useState(() => readStorage(`orbital-command-tutorial-${mission.id}`) === 'done');
   const [tutorialPointer, setTutorialPointer] = useState<{ x: number; y: number; angle: number; visible: boolean } | null>(null);
   const tutorialDismissedRef = useRef(tutorialDismissed);
@@ -235,8 +343,20 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
   const [speed, setSpeed] = useState(0);
   const [cockpit, setCockpit] = useState(false);
   const [message, setMessage] = useState('Navegación libre activa · selecciona un astro o marca una ruta.');
+  const scanEnergy = 5 + instruments[design.instrument].power * 2;
+  const scanStorage = instruments[design.instrument].data * 100 / hulls[design.ship].storage;
 
   useEffect(() => { tutorialDismissedRef.current = tutorialDismissed; }, [tutorialDismissed]);
+  useEffect(() => {
+    if (!firstLook) return;
+    const timer = window.setTimeout(() => { writeStorage('orbital-command-first-look-v1', 'done'); setFirstLook(false); }, 6500);
+    return () => window.clearTimeout(timer);
+  }, [firstLook]);
+  useEffect(() => {
+    if (windowCooldown <= 0) return;
+    const timer = window.setTimeout(() => setWindowCooldown((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearTimeout(timer);
+  }, [windowCooldown]);
   useEffect(() => { window.dispatchEvent(new CustomEvent('orbital-ship-change', { detail: shipId })); }, [shipId]);
 
   useEffect(() => {
@@ -261,6 +381,7 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
     renderer.toneMappingExposure = 1.15;
     renderer.domElement.className = 'exploration-canvas';
     host.appendChild(renderer.domElement);
+    const detachQuality = attachRenderQuality(renderer, host);
 
     const ambient = new THREE.AmbientLight(0x9eb7d3, 0.62);
     scene.add(ambient);
@@ -312,7 +433,8 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
     for (const data of celestialBodies) {
       const group = new THREE.Group();
       group.position.set(...data.position);
-      const material = new THREE.MeshStandardMaterial({ color: data.color, roughness: 0.84, metalness: 0.02, emissive: '#000000', emissiveIntensity: 0.7 });
+      const texture = loadPlanetTexture(data.id);
+      const material = new THREE.MeshStandardMaterial({ color: texture ? '#ffffff' : data.color, map: texture, roughness: 0.84, metalness: 0.02, emissive: '#000000', emissiveIntensity: 0.7 });
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(data.radius, 36, 28), material);
       mesh.userData.bodyId = data.id;
       mesh.userData.bodyName = data.name;
@@ -364,6 +486,16 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
     asteroidGeometry.setAttribute('position', new THREE.BufferAttribute(asteroidPositions, 3));
     system.add(new THREE.Points(asteroidGeometry, new THREE.PointsMaterial({ color: '#b7a17b', size: 0.095, transparent: true, opacity: 0.82 })));
 
+    const satelliteOrbit = new THREE.Group();
+    if (mission.id === 'earth') {
+      const satellite = new THREE.Group();
+      satellite.add(new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.24, 0.24), new THREE.MeshStandardMaterial({ color: '#dbe7ed', metalness: 0.65 })));
+      for (const side of [-1, 1]) { const panel = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.025, 0.2), new THREE.MeshStandardMaterial({ color: '#1d6c9b', metalness: 0.4 })); panel.position.x = side * 0.31; satellite.add(panel); }
+      satellite.position.set(1.8, 0.4, 0); satelliteOrbit.add(satellite);
+      bodies.find((item) => item.data.id === 'earth')?.group.add(satelliteOrbit);
+    }
+    satelliteOrbit.visible = satelliteDeployed;
+
     const ship = makeShip(shipId);
     ship.position.set(0, 1.1, 12);
     ship.rotation.order = 'YXZ';
@@ -392,10 +524,18 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
     destinationMarker.visible = false;
     system.add(destinationMarker);
 
-    const surface = createSurface();
+    const surface = supportsSurface ? createSurface(mission.id) : { root: new THREE.Group(), rover: new THREE.Group(), astronaut: new THREE.Group(), points: [] as PointOfInterest[], setZone: (_zoneId: string) => {} };
     surface.setZone(progress.landingZone ?? landingZoneId);
     surface.root.visible = false;
     scene.add(surface.root);
+    const sensorGroup = new THREE.Group(); surface.root.add(sensorGroup);
+    const createSensor = (position: SurfaceSensor) => {
+      const sensor = new THREE.Group();
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 1.2, 10), new THREE.MeshStandardMaterial({ color: '#d5e6ed', metalness: 0.45 })); mast.position.y = 0.6; sensor.add(mast);
+      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 8), new THREE.MeshStandardMaterial({ color: '#75e3ee', emissive: '#147b8d', emissiveIntensity: 0.9 })); tip.position.y = 1.3; sensor.add(tip);
+      sensor.position.set(position.x, terrainHeight(position.x, position.z, mission.id), position.z); sensorGroup.add(sensor);
+    };
+    sensors.forEach(createSensor);
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
@@ -426,12 +566,23 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
     let currentProgress: LunarProgress = { ...progress };
     let currentSurvey: OrbitalSurvey = { ...orbitalSurvey };
     let currentResources: ExplorationResources = { ...resources };
+    let currentBuffers: DataBuffers = { ...buffers };
+    let currentLabReadings = [...labReadings];
+    let currentPhotoCount = photoCount;
+    let currentSensors = [...sensors];
+    let currentSatelliteDeployed = satelliteDeployed;
+    let currentEvents = loadMissionEvents(mission.id);
+    let stormNow = false;
+    let nextWindowAt = 0;
     let stationNearby = false;
+    let onFootNow = false;
+    const activeVehicle = () => onFootNow ? surface.astronaut : surface.rover;
     let lastHudUpdate = 0;
     let lastGuideUpdate = 0;
     let currentSpeed = 0;
     let landingSequence: { start: THREE.Vector3; end: THREE.Vector3; elapsed: number; zoneId: string } | null = null;
     let toastTimer = 0;
+    let acquisitionTimer = 0;
     const clock = new THREE.Clock();
 
     const setMessageForSeconds = (text: string) => {
@@ -440,22 +591,45 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
       toastTimer = window.setTimeout(() => setMessage(''), 4300);
     };
     const awardCompletion = () => {
+      const surfaceResults = supportsSurface && currentProgress.transmitted;
+      const regions = surfaceResults
+        ? currentProgress.scannedRocks.map((index) => surface.points[index].name)
+        : currentSurvey.scannedRegions.map((index) => (orbitalRegions[mission.id] ?? ['Sector norte', 'Sector ecuatorial', 'Sector sur'])[index]);
+      const samples = surfaceResults ? currentProgress.collectedSamples.map((index) => surface.points[index].name) : [];
+      const saved = saveReport(createScienceReport(mission, design, currentResources, regions, samples, currentLabReadings, arrival?.choice ?? null, currentPhotoCount, currentEvents));
+      if (!saved) setMessageForSeconds('Transmisión completa, pero el navegador no permitió guardar el informe local.');
       const { progress: updated, awarded } = awardMission(mission.id, mission.reward, Math.round(mission.budget * 0.18));
+      window.dispatchEvent(new CustomEvent('orbital-commander-transmission', { detail: { id: `complete-${mission.id}`, title: 'TRANSMISIÓN RECIBIDA', text: `Buen trabajo. Los datos de ${mission.destination} han llegado al centro de control. Nuestros equipos internacionales podrán revisar el informe y sus limitaciones.` } }));
       window.dispatchEvent(new CustomEvent('orbital-player-progress', { detail: updated }));
       if (awarded) { playSound('complete'); setMessageForSeconds(`Recompensa acreditada · +${mission.reward} XP · +${Math.round(mission.budget * 0.18)} CR.`); }
     };
     const commitProgress = (patch: Partial<LunarProgress>, notification: string) => {
+      const firstSample = currentProgress.collectedSamples.length === 0 && Boolean(patch.collectedSamples?.length);
       currentProgress = { ...currentProgress, ...patch };
       setProgress(currentProgress);
       saveLunarProgress(mission.id, currentProgress);
       setMessageForSeconds(notification);
       if ('scannedRocks' in patch || 'collectedSamples' in patch) playSound('scan');
+      if (firstSample) window.dispatchEvent(new CustomEvent('orbital-commander-transmission', { detail: { id: 'first-sample', title: 'EL PRIMER DESCUBRIMIENTO', text: 'Acabas de convertir una pregunta en una oportunidad para aprender. Puede parecer una pequeña roca, pero cada descubrimiento nos acerca a comprender nuestra historia.' } }));
     };
     const commitResources = (patch: Partial<ExplorationResources>) => {
+      if (patch.storage !== undefined && patch.storage > currentResources.storage && patch.energy !== undefined) {
+        setAcquisition({ energy: currentResources.energy - patch.energy, data: (patch.storage - currentResources.storage) * hulls[design.ship].storage / 100 });
+        window.clearTimeout(acquisitionTimer);
+        acquisitionTimer = window.setTimeout(() => setAcquisition(null), 4500);
+        playSound('scan');
+      }
       currentResources = { ...currentResources, ...patch };
       setResources(currentResources);
       saveExplorationResources(mission.id, currentResources);
     };
+    const commitBuffers = (next: DataBuffers) => {
+      currentBuffers = next;
+      setBuffers(next);
+      writeStorage(`orbital-command-buffers-${mission.id}`, JSON.stringify(next));
+    };
+    const bufferData = (kind: DataKind, amount: number) => commitBuffers(addBufferedData(currentBuffers, kind, amount));
+    if (arrival) commitBuffers(currentBuffers);
     const commitSurvey = (patch: Partial<OrbitalSurvey>, notification: string) => {
       currentSurvey = { ...currentSurvey, ...patch };
       setOrbitalSurvey(currentSurvey);
@@ -463,17 +637,21 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
       setMessageForSeconds(notification);
     };
     const setModeNow = (next: Mode) => {
-      if (next === 'surface' && (!currentProgress.landed || !currentProgress.roverDeployed || selectedNow !== 'moon')) {
-        setMessageForSeconds('Descenso bloqueado · establece órbita lunar y selecciona una zona de aterrizaje segura.');
+      if (modeNow === 'surface' && next !== 'surface' && onFootNow) { setMessageForSeconds('Vuelve al rover antes de abandonar la superficie.'); return; }
+      if (next === 'surface' && (!supportsSurface || !currentProgress.landed || !currentProgress.roverDeployed || selectedNow !== mission.targetBodyId)) {
+        setMessageForSeconds('Descenso bloqueado · establece órbita y selecciona una zona segura para el rover.');
         return;
       }
       const previous = modeNow;
+      if (next === 'orbit') stopEngine();
       modeNow = next;
       setMode(next);
       system.visible = next !== 'surface';
       sunLight.visible = next !== 'surface';
       surfaceLight.visible = next === 'surface';
       surface.root.visible = next === 'surface';
+      scene.background = new THREE.Color(next === 'surface' && mission.id === 'titan' ? '#5b402c' : next === 'surface' && mission.id === 'mars' ? '#69483e' : '#030811');
+      scene.fog = next === 'surface' && mission.id === 'titan' ? new THREE.Fog('#75543a', 12, 65) : next === 'surface' && mission.id === 'mars' ? new THREE.Fog('#69483e', 28, 95) : null;
       routeLine.visible = next === 'flight' && Boolean(routeTarget);
       if (next === 'orbit') {
         const body = bodies.find((item) => item.data.id === selectedNow);
@@ -629,7 +807,7 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
       if (modeNow !== 'surface') return;
       const point = surface.points[index];
       if (!point) return;
-      const range = surface.rover.position.distanceTo(point.position);
+      const range = activeVehicle().position.distanceTo(point.position);
       if (range > 4.2) {
         setMessageForSeconds(`${point.name} está a ${range.toFixed(1)} m · acércate a menos de 4 m para interactuar.`);
         return;
@@ -644,6 +822,7 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
           beacon.material.emissive.set('#1a7044');
           commitProgress({ scannedRocks }, `${point.name} escaneado · composición mineral registrada (${scannedRocks.length}/3).`);
           commitResources({ energy: currentResources.energy - 8, storage: currentResources.storage + 8 });
+      bufferData('observations', 8);
           return;
         }
         if (currentProgress.collectedSamples.includes(point.index)) {
@@ -655,6 +834,7 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
         const collectedSamples = [...currentProgress.collectedSamples, point.index];
         commitProgress({ collectedSamples }, `Muestra de ${point.name} recolectada · ${collectedSamples.length}/3 muestras.`);
         commitResources({ energy: currentResources.energy - 6, storage: currentResources.storage + 12 });
+      bufferData('sensors', 12);
         return;
       }
       if (currentResources.energy < 30) {
@@ -672,32 +852,61 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
       if (currentResources.storage + 18 > 100) { setMessageForSeconds('Almacenamiento insuficiente para el informe de laboratorio.'); return; }
       commitProgress({ analyzed: true }, 'Análisis geológico completo · informe guardado en la computadora de a bordo.');
       commitResources({ energy: currentResources.energy - 12, storage: currentResources.storage + 18 });
+      bufferData('sensors', 18);
     };
     const scanOrbitalSector = () => {
       if (modeNow !== 'orbit') return;
       if (mission.id === 'moon') { setMessageForSeconds('LUNAR FRONTIER: usa el rover y escanea las formaciones de la superficie.'); return; }
+      if (mission.id === 'earth' && !currentSatelliteDeployed) { setMessageForSeconds('Despliega primero el satélite de observación terrestre.'); return; }
       if (selectedNow !== mission.targetBodyId || !currentSurvey.arrived) {
         setMessageForSeconds(`El instrumento orbital está preparado para ${mission.destination}. Establece primero su órbita.`);
         return;
       }
       if (currentSurvey.scannedRegions.length >= 3) { setMessageForSeconds('Los tres sectores de esta campaña ya fueron registrados. Transmite el informe al centro.'); return; }
-      if (currentResources.energy < 10 || currentResources.storage + 9 > 100) {
-        setMessageForSeconds(currentResources.energy < 10 ? 'Energía insuficiente para el instrumento orbital.' : 'Almacenamiento insuficiente para otro paquete científico.');
+      if (currentResources.energy < scanEnergy || currentResources.storage + scanStorage > 100) {
+        setMessageForSeconds(currentResources.energy < scanEnergy ? 'Energía insuficiente para el instrumento orbital.' : 'Almacenamiento insuficiente. Transmite datos antes de otro escaneo.');
         return;
       }
       const regions = orbitalRegions[mission.id] ?? ['Sector norte', 'Sector ecuatorial', 'Sector sur'];
       const regionIndex = currentSurvey.scannedRegions.length;
       const scannedRegions = [...currentSurvey.scannedRegions, regionIndex];
       commitSurvey({ scannedRegions }, `${mission.destination}: ${regions[regionIndex]} escaneado · ${scannedRegions.length}/3 sectores.`);
-      commitResources({ energy: currentResources.energy - 10, storage: currentResources.storage + 9 });
+      commitResources({ energy: currentResources.energy - scanEnergy, storage: currentResources.storage + scanStorage });
+      bufferData('observations', scanStorage);
     };
     const onScanOrbital = () => scanOrbitalSector();
+    const onLabRecord = (event: Event) => {
+      const reading = (event as CustomEvent<LabReading>).detail;
+      const energyCost = scanEnergy / 2;
+      const storageCost = scanStorage / 3;
+      if (modeNow !== 'orbit' || selectedNow !== mission.targetBodyId || !reading || typeof reading.region !== 'string' || typeof reading.label !== 'string' || typeof reading.unit !== 'string' || !Number.isFinite(reading.value)) return;
+      if (currentResources.energy < energyCost || currentResources.storage + storageCost > 100 || currentLabReadings.length >= 24) { setMessageForSeconds('No se pudo registrar la lectura: revisa energía, almacenamiento o límite de lecturas.'); return; }
+      currentLabReadings = [...currentLabReadings, reading];
+      setLabReadings(currentLabReadings);
+      writeStorage(`orbital-command-lab-${mission.id}`, JSON.stringify(currentLabReadings));
+      commitResources({ energy: currentResources.energy - energyCost, storage: currentResources.storage + storageCost });
+      bufferData('sensors', storageCost);
+      setMessageForSeconds(`Lectura simulada registrada: ${reading.region}.`);
+    };
+    const onTransmitData = (event: Event) => {
+      const kind = (event as CustomEvent<DataKind>).detail;
+      if (!['observations', 'sensors', 'telemetry'].includes(kind) || currentBuffers[kind] <= 0) return;
+      if (modeNow !== 'orbit' || selectedNow !== mission.targetBodyId || currentResources.storage <= 0) return;
+      if (performance.now() < nextWindowAt) { setMessageForSeconds('La siguiente ventana de comunicación aún no está disponible.'); return; }
+      if (currentResources.energy < 2 || currentResources.communications < 2) { setMessageForSeconds('Energía o enlace insuficientes para transmitir el paquete.'); return; }
+      const transmitted = radios[design.radio].data * 100 / hulls[design.ship].storage;
+      nextWindowAt = performance.now() + 3000; setWindowCooldown(3);
+      const nextBuffers = transmitBufferedData(currentBuffers, kind, transmitted);
+      commitBuffers(nextBuffers);
+      commitResources({ storage: totalBuffered(nextBuffers), energy: currentResources.energy - 2, communications: currentResources.communications - 2 });
+      setMessageForSeconds('Paquete científico transmitido · almacenamiento liberado.');
+    };
     const scanNearby = () => {
       if (modeNow !== 'surface') return;
       let nearestIndex = -1;
       let nearestDistance = Infinity;
       surface.points.forEach((point, index) => {
-        const range = surface.rover.position.distanceTo(point.position);
+        const range = activeVehicle().position.distanceTo(point.position);
         if (range < nearestDistance) { nearestDistance = range; nearestIndex = index; }
       });
       if (nearestIndex < 0 || nearestDistance > 4.2) {
@@ -707,9 +916,11 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
       interactPoint(nearestIndex);
     };
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.target instanceof HTMLElement && event.target.closest('input, select, textarea, [contenteditable="true"], [role="dialog"]')) return;
       const key = event.key.toLowerCase();
       if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(key)) event.preventDefault();
       keys.add(key);
+      if (modeNow !== 'orbit' && !onFootNow && (modeNow === 'surface' ? currentResources.energy > 0 : currentResources.fuel > 0) && ['w', 'a', 's', 'd', 'arrowup', 'arrowdown'].includes(key)) startEngine();
       if (modeNow === 'flight' && ['w', 'a', 's', 'd'].includes(key) && autopilot) {
         autopilot = false;
         routeTarget = undefined;
@@ -728,8 +939,8 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
       }
       if (key === 'escape' && modeNow !== 'flight') setModeNow('flight');
     };
-    const onKeyUp = (event: KeyboardEvent) => keys.delete(event.key.toLowerCase());
-    const onBlur = () => keys.clear();
+    const onKeyUp = (event: KeyboardEvent) => { keys.delete(event.key.toLowerCase()); if (!['w', 'a', 's', 'd', 'arrowup', 'arrowdown'].some((key) => keys.has(key))) stopEngine(); };
+    const onBlur = () => { keys.clear(); stopEngine(); };
     const onStartRoute = (event: Event) => {
       const id = (event as CustomEvent<{ id: string }>).detail.id;
       const target = createSafeRoute(id);
@@ -759,6 +970,16 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
       currentProgress = { ...initialLunarProgress };
       currentSurvey = { ...emptyOrbitalSurvey };
       currentResources = { ...initialExplorationResources };
+      commitBuffers(emptyDataBuffers());
+      onFootNow = false; setOnFoot(false); surface.astronaut.visible = false;
+      currentLabReadings = [];
+      setLabReadings([]);
+      removeStorage(`orbital-command-lab-${mission.id}`);
+      currentPhotoCount = 0; setPhotoCount(0); removeStorage(`orbital-command-photos-${mission.id}`);
+      currentSensors = []; setSensors([]); removeStorage(`orbital-command-sensors-${mission.id}`);
+      currentEvents = []; removeStorage(`orbital-command-events-${mission.id}`);
+      if (mission.id === 'earth') { currentSatelliteDeployed = false; setSatelliteDeployed(false); satelliteOrbit.visible = false; removeStorage('orbital-command-satellite-earth'); }
+      sensorGroup.traverse((object) => { if (object instanceof THREE.Mesh) { object.geometry.dispose(); (object.material as THREE.Material).dispose(); } }); sensorGroup.clear();
       saveLunarProgress(mission.id, currentProgress);
       writeStorage(`orbital-command-survey-${mission.id}`, JSON.stringify(currentSurvey));
       saveExplorationResources(mission.id, currentResources);
@@ -771,6 +992,7 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
       setTutorialPointer(null);
       setSelectedPoi(null);
       setTransmissionCountdown(0);
+      nextWindowAt = 0; setWindowCooldown(0);
       setTransmissionType(null);
       routeWaypoints.length = 0;
       routeTarget = undefined;
@@ -783,7 +1005,7 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
       ship.position.set(0, 1.1, 12);
       const radial = new THREE.Vector3(ship.position.x, 0, ship.position.z).normalize();
       flightVelocity.set(-radial.z, 0, radial.x).multiplyScalar(Math.sqrt(24 / Math.max(Math.hypot(ship.position.x, ship.position.z), 5.4)));
-      surface.rover.position.set(0, terrainHeight(0, 0), 0);
+      surface.rover.position.set(0, terrainHeight(0, 0, mission.id), 0);
       setModeNow('flight');
       reportHazard('');
       setMessageForSeconds('Campaña reiniciada · nave y recursos restaurados en el punto de lanzamiento terrestre.');
@@ -796,15 +1018,15 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
     };
     const onLand = (event: Event) => {
       const zoneId = (event as CustomEvent<string>).detail;
-      if (modeNow !== 'orbit' || selectedNow !== 'moon' || !currentProgress.arrived || !currentProgress.orbit) {
-        setMessageForSeconds('Aterrizaje no disponible · llega primero a la Luna y establece órbita.');
+      if (!supportsSurface || modeNow !== 'orbit' || selectedNow !== mission.targetBodyId || !currentProgress.arrived || !currentProgress.orbit) {
+        setMessageForSeconds('Aterrizaje no disponible · llega primero al destino y establece órbita.');
         return;
       }
       if (!landingZones.some((zone) => zone.id === zoneId)) { setMessageForSeconds('Selecciona una zona de aterrizaje válida.'); return; }
-      if (currentResources.fuel < 12 || currentResources.integrity < 35) { setMessageForSeconds('Recursos insuficientes para el descenso controlado.'); return; }
+      if (currentResources.fuel < 12 || currentResources.energy < 3 || currentResources.integrity < 35) { setMessageForSeconds('Recursos insuficientes para el descenso controlado.'); return; }
       if (landingSequence) return;
-      const moonPosition = getBodyPosition('moon') ?? new THREE.Vector3();
-      landingSequence = { start: ship.position.clone(), end: moonPosition.clone().add(new THREE.Vector3(0, 1.7, 0)), elapsed: 0, zoneId };
+      const bodyPosition = getBodyPosition(mission.targetBodyId) ?? new THREE.Vector3();
+      landingSequence = { start: ship.position.clone(), end: bodyPosition.clone().add(new THREE.Vector3(0, 1.7, 0)), elapsed: 0, zoneId };
       setLandingInProgress(true);
       setMessageForSeconds('Descenso iniciado · estabilizando actitud, frenando y desplegando tren de aterrizaje.');
       playSound('launch');
@@ -812,10 +1034,11 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
     const onInteractPoi = (event: Event) => interactPoint((event as CustomEvent<number>).detail);
     const onTransmit = () => {
       if (modeNow !== 'surface' || !currentProgress.analyzed) { setMessageForSeconds('Transmisión bloqueada · completa primero el análisis geológico.'); return; }
-      if (!stationNearby || surface.rover.position.distanceTo(surface.points[3].position) > 4.2) { setMessageForSeconds('Acércate a la antena de superficie para establecer el enlace.'); return; }
+      if (!stationNearby || activeVehicle().position.distanceTo(surface.points[3].position) > 4.2) { setMessageForSeconds('Acércate a la antena de superficie para establecer el enlace.'); return; }
       if (currentResources.communications < 12 || currentResources.energy < 5) { setMessageForSeconds('Recursos de enlace insuficientes · recarga en la estación antes de transmitir.'); return; }
-      commitResources({ communications: currentResources.communications - 12, energy: currentResources.energy - 5 });
-      commitProgress({ transmitted: true }, 'Enlace confirmado · resultados recibidos por el centro de control. ¡LUNAR FRONTIER completada!');
+      commitResources({ communications: currentResources.communications - 12, energy: currentResources.energy - 5, storage: 0 });
+      commitBuffers(emptyDataBuffers());
+      commitProgress({ transmitted: true }, `Enlace confirmado · resultados de superficie de ${mission.destination} recibidos por el centro de control.`);
       awardCompletion();
       tutorialDismissedRef.current = true;
       writeStorage(`orbital-command-tutorial-${mission.id}`, 'done');
@@ -828,12 +1051,68 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
         return;
       }
       if (currentSurvey.scannedRegions.length < 3) { setMessageForSeconds('Completa los tres sectores científicos antes de transmitir.'); return; }
+      if (performance.now() < nextWindowAt) { setMessageForSeconds('Espera la siguiente ventana de comunicación.'); return; }
+      if (currentResources.storage * hulls[design.ship].storage / 100 > radios[design.radio].data + 0.0001) { setMessageForSeconds('El paquete supera la capacidad de esta ventana. Transmite paquetes parciales antes del informe final.'); return; }
       if (currentResources.communications < 15 || currentResources.energy < 5) { setMessageForSeconds('Recursos de comunicación insuficientes para el uplink orbital.'); return; }
-      commitResources({ communications: currentResources.communications - 15, energy: currentResources.energy - 5 });
+      commitResources({ communications: currentResources.communications - 15, energy: currentResources.energy - 5, storage: 0 });
+      commitBuffers(emptyDataBuffers());
       commitSurvey({ transmitted: true }, `Datos de ${mission.destination} recibidos · ${mission.name} completada.`);
       awardCompletion();
     };
     const onSetMode = (event: Event) => setModeNow((event as CustomEvent<Mode>).detail);
+    const onCapturePhoto = () => {
+      if (currentPhotoCount >= 1000) return;
+      try {
+        renderer.render(scene, camera);
+        const image = renderer.domElement.toDataURL('image/png');
+        const link = document.createElement('a'); link.href = image; link.download = `orbital-${mission.id}-${currentPhotoCount + 1}.png`; link.click();
+        currentPhotoCount += 1; setPhotoCount(currentPhotoCount); writeStorage(`orbital-command-photos-${mission.id}`, String(currentPhotoCount));
+        setMessageForSeconds('Fotografía de la simulación exportada.');
+      } catch { setMessageForSeconds('No se pudo exportar la fotografía en este navegador.'); }
+    };
+    const onDeploySatellite = () => {
+      if (mission.id !== 'earth' || modeNow !== 'orbit' || selectedNow !== 'earth' || currentSatelliteDeployed) return;
+      if (currentResources.energy < 5 || currentResources.storage + 5 > 100 || currentLabReadings.length >= 24) { setMessageForSeconds('No hay suficiente energía o almacenamiento para desplegar el satélite.'); return; }
+      currentSatelliteDeployed = true; setSatelliteDeployed(true); satelliteOrbit.visible = true; writeStorage('orbital-command-satellite-earth', 'done');
+      currentLabReadings = [...currentLabReadings, { region: 'Órbita terrestre', label: 'Satélite desplegado', value: 1, unit: 'equipo simulado' }];
+      setLabReadings(currentLabReadings); writeStorage(`orbital-command-lab-${mission.id}`, JSON.stringify(currentLabReadings));
+      commitResources({ energy: currentResources.energy - 5, storage: currentResources.storage + 5 });
+      bufferData('sensors', 5);
+      setMessageForSeconds('Satélite desplegado · sensores terrestres listos para observación.');
+    };
+    const onDeploySensor = () => {
+      if (modeNow !== 'surface' || currentSensors.length >= 3 || currentLabReadings.length >= 24 || currentResources.energy < 5 || currentResources.storage + 5 > 100) { setMessageForSeconds('No se puede instalar el sensor: revisa energía, datos y límite de equipos.'); return; }
+      const position = activeVehicle().position;
+      const sensor = { x: THREE.MathUtils.clamp(position.x + 1.5, -42, 42), z: position.z };
+      currentSensors = [...currentSensors, sensor]; setSensors(currentSensors); createSensor(sensor);
+      writeStorage(`orbital-command-sensors-${mission.id}`, JSON.stringify(currentSensors));
+      const reading: LabReading = { region: `Estación ${currentSensors.length}`, label: 'Sensor desplegado', value: 1, unit: 'equipo simulado' };
+      currentLabReadings = [...currentLabReadings, reading]; setLabReadings(currentLabReadings); writeStorage(`orbital-command-lab-${mission.id}`, JSON.stringify(currentLabReadings));
+      commitResources({ energy: currentResources.energy - 5, storage: currentResources.storage + 5 });
+      bufferData('sensors', 5);
+      setMessageForSeconds('Sensor científico instalado · registro guardado en la nave.');
+    };
+    const onToggleWalking = () => {
+      if (modeNow !== 'surface' || !['moon', 'mars'].includes(mission.id)) return;
+      if (onFootNow && surface.astronaut.position.distanceTo(surface.rover.position) > 3) { setMessageForSeconds('Acércate al rover para volver a subir.'); return; }
+      onFootNow = !onFootNow;
+      if (onFootNow) { surface.astronaut.position.copy(surface.rover.position).add(new THREE.Vector3(1.8, 0, 0)); surface.astronaut.rotation.copy(surface.rover.rotation); }
+      surface.astronaut.visible = onFootNow;
+      setOnFoot(onFootNow);
+      setMessageForSeconds(onFootNow ? 'Actividad extravehicular simulada · permanece cerca del rover y vigila la energía.' : 'Tripulación a bordo del rover.');
+    };
+    if (arrival) {
+      setModeNow('orbit');
+      saveExplorationResources(mission.id, currentResources);
+      if (supportsSurface) commitProgress({ arrived: true, orbit: true }, `Viaje completado · órbita de ${mission.destination} estable. Selecciona una zona de aterrizaje.`);
+      if (mission.id !== 'moon') commitSurvey({ arrived: true }, `Viaje completado · órbita científica de ${mission.destination} establecida.`);
+    }
+    const narrativeTimer = arrival && ['earth', 'mars'].includes(mission.id) ? window.setTimeout(() => {
+      const text = mission.id === 'earth'
+        ? 'Desde aquí, las fronteras desaparecen. No vemos países, diferencias ni divisiones. Solo vemos un hogar. Recuerda por qué estamos aquí.'
+        : 'Ahí está Marte. Después de tantos meses de preparación, verlo ante nosotros nos recuerda por qué emprendimos este viaje. Tómate un momento y revisa los sistemas antes de explorar.';
+      window.dispatchEvent(new CustomEvent('orbital-commander-transmission', { detail: { id: `first-look-${mission.id}`, title: mission.id === 'earth' ? 'LA PRIMERA MIRADA' : 'LA FRONTERA ROJA', text } }));
+    }, 3000) : 0;
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
     renderer.domElement.addEventListener('pointermove', onPointerMove);
     renderer.domElement.addEventListener('pointerup', onPointerUp);
@@ -850,11 +1129,18 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
     window.addEventListener('orbital-transmit-results', onTransmit);
     window.addEventListener('orbital-transmit-orbit-results', onTransmitOrbital);
     window.addEventListener('orbital-scan-sector', onScanOrbital);
+    window.addEventListener('orbital-lab-record', onLabRecord);
+    window.addEventListener('orbital-transmit-data', onTransmitData);
     window.addEventListener('orbital-set-mode', onSetMode);
+    window.addEventListener('orbital-toggle-walking', onToggleWalking);
+    window.addEventListener('orbital-capture-photo', onCapturePhoto);
+    window.addEventListener('orbital-deploy-sensor', onDeploySensor);
+    window.addEventListener('orbital-deploy-satellite', onDeploySatellite);
 
     let animationId = 0;
     const animate = () => {
       animationId = window.requestAnimationFrame(animate);
+      if (document.hidden) { clock.getDelta(); return; }
       const delta = Math.min(clock.getDelta(), 0.045);
       const elapsed = clock.elapsedTime;
       if (landingSequence) {
@@ -870,7 +1156,7 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
           const zoneId = landingSequence.zoneId;
           landingSequence = null;
           surface.setZone(zoneId);
-          commitResources({ fuel: currentResources.fuel - 12, energy: Math.max(currentResources.energy, 65), integrity: currentResources.integrity - 2 });
+          commitResources({ fuel: currentResources.fuel - 12, energy: currentResources.energy - 3, integrity: currentResources.integrity - 2 });
           commitProgress({ landingZone: zoneId, landed: true, roverDeployed: true }, 'Aterrizaje seguro · rover desplegado en la región seleccionada.');
           setSelectedPoi(null);
           setLandingInProgress(false);
@@ -880,6 +1166,7 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
         return;
       }
       sun.rotation.y = elapsed * 0.035;
+      satelliteOrbit.rotation.y += delta * 0.3;
       sunGlow.scale.setScalar(1 + Math.sin(elapsed * 0.8) * 0.018);
       for (const body of bodies) {
         const angle = body.phase + elapsed * body.angularSpeed;
@@ -1027,38 +1314,39 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
         else if (activeHazard.startsWith('ADVERTENCIA: sonda en zona de calor solar')) reportHazard('');
         currentSpeed = 0;
       } else {
-        const forward = new THREE.Vector3(0, 0, -1).applyEuler(surface.rover.rotation);
+        const vehicle = activeVehicle();
+        const forward = new THREE.Vector3(0, 0, -1).applyEuler(vehicle.rotation);
         const emergencyLimp = currentResources.energy <= 0;
         const boost = emergencyLimp ? 1 : keys.has('shift') ? 2.7 : 1;
-        const roverSpeed = emergencyLimp ? 0.85 : keys.has('shift') ? 8 : 3.8;
+        const roverSpeed = onFootNow ? 1.2 : emergencyLimp ? 0.85 : keys.has('shift') ? 8 : 3.8;
         const driving = keys.has('w') || keys.has('s') || keys.has('arrowup') || keys.has('arrowdown');
-        const beforeMove = surface.rover.position.clone();
-        const previousHeight = surface.rover.position.y;
-        if (keys.has('w') || keys.has('arrowup')) surface.rover.position.addScaledVector(forward, roverSpeed * boost * delta);
-        if (keys.has('s') || keys.has('arrowdown')) surface.rover.position.addScaledVector(forward, -roverSpeed * 0.7 * delta);
-        if (keys.has('a') || keys.has('arrowleft')) surface.rover.rotation.y += delta * 1.1;
-        if (keys.has('d') || keys.has('arrowright')) surface.rover.rotation.y -= delta * 1.1;
+        const beforeMove = vehicle.position.clone();
+        const previousHeight = vehicle.position.y;
+        if (keys.has('w') || keys.has('arrowup')) vehicle.position.addScaledVector(forward, roverSpeed * (onFootNow ? 1 : boost) * delta);
+        if (keys.has('s') || keys.has('arrowdown')) vehicle.position.addScaledVector(forward, -roverSpeed * 0.7 * delta);
+        if (keys.has('a') || keys.has('arrowleft')) vehicle.rotation.y += delta * 1.1;
+        if (keys.has('d') || keys.has('arrowright')) vehicle.rotation.y -= delta * 1.1;
         if (emergencyLimp && driving && elapsed - lastHudUpdate > 1) setMessageForSeconds('Reserva de emergencia · velocidad limitada. Regresa a la estación para recargar.');
-        surface.rover.position.x = THREE.MathUtils.clamp(surface.rover.position.x, -42, 42);
-        surface.rover.position.z = THREE.MathUtils.clamp(surface.rover.position.z, -42, 42);
-        surface.rover.position.y = terrainHeight(surface.rover.position.x, surface.rover.position.z);
-        const groundDistance = beforeMove.distanceTo(surface.rover.position);
+        vehicle.position.x = THREE.MathUtils.clamp(vehicle.position.x, -42, 42);
+        vehicle.position.z = THREE.MathUtils.clamp(vehicle.position.z, -42, 42);
+        vehicle.position.y = terrainHeight(vehicle.position.x, vehicle.position.z, mission.id);
+        const groundDistance = beforeMove.distanceTo(vehicle.position);
         if (currentResources.energy > 0) currentResources.energy = Math.max(0, currentResources.energy - groundDistance * 0.48 - (driving ? delta * 0.05 : 0));
-        if (Math.abs(surface.rover.position.y - previousHeight) > 0.32 && groundDistance > 0.1 && currentResources.integrity > 0) currentResources.integrity = Math.max(0, currentResources.integrity - 0.7);
-        currentSpeed = driving ? roverSpeed * boost : 0;
-        const roverOffset = new THREE.Vector3(0, 4.8, 10).applyQuaternion(surface.rover.quaternion);
-        desiredCamera.copy(surface.rover.position).add(roverOffset);
-        lookTarget.copy(surface.rover.position).add(new THREE.Vector3(0, 1.1, 0));
+        if (Math.abs(vehicle.position.y - previousHeight) > 0.32 && groundDistance > 0.1 && currentResources.integrity > 0) currentResources.integrity = Math.max(0, currentResources.integrity - 0.7);
+        currentSpeed = driving ? roverSpeed * (onFootNow ? 1 : boost) : 0;
+        const roverOffset = new THREE.Vector3(0, onFootNow ? 3 : 4.8, onFootNow ? 6 : 10).applyQuaternion(vehicle.quaternion);
+        desiredCamera.copy(vehicle.position).add(roverOffset);
+        lookTarget.copy(vehicle.position).add(new THREE.Vector3(0, 1.1, 0));
         camera.position.lerp(desiredCamera, 1 - Math.exp(-delta * 4));
         camera.lookAt(lookTarget);
         const station = surface.points.find((point) => point.kind === 'station');
-        const nowAtStation = Boolean(station && surface.rover.position.distanceTo(station.position) <= 4.2);
+        const nowAtStation = Boolean(station && vehicle.position.distanceTo(station.position) <= 4.2);
         stationNearby = nowAtStation;
         setAtStation((previous) => previous === nowAtStation ? previous : nowAtStation);
         surface.points.forEach((point) => { point.object.children[0]?.rotation && (point.object.children[0].rotation.y += delta * 0.7); });
       }
 
-      if (modeNow !== 'orbit') currentResources.elapsedMinutes += delta * 0.4;
+      currentResources.elapsedMinutes += delta * 0.4;
 
       if (elapsed - lastGuideUpdate > 0.28) {
         lastGuideUpdate = elapsed;
@@ -1080,6 +1368,18 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
         } else setTutorialPointer(null);
       }
 
+      const storm = modeNow === 'surface' && isSimulatedDustStorm(mission.id, currentResources.elapsedMinutes);
+      if (storm !== stormNow) {
+        stormNow = storm; setDustStorm(storm);
+        if (modeNow === 'surface' && mission.id === 'mars') { scene.background = new THREE.Color(storm ? '#9e5f42' : '#69483e'); scene.fog = new THREE.Fog(storm ? '#9e5f42' : '#69483e', storm ? 5 : 28, storm ? 34 : 95); }
+        if (storm) {
+          currentEvents = [...currentEvents, 'Tormenta de polvo simulada: visibilidad y reservas energéticas reducidas.'].slice(-20);
+          writeStorage(`orbital-command-events-${mission.id}`, JSON.stringify(currentEvents));
+          window.dispatchEvent(new CustomEvent('orbital-commander-transmission', { detail: { id: 'mars-storm', title: 'TORMENTA DE POLVO', text: 'La visibilidad está disminuyendo. Protege los sistemas, vigila la energía y decide si conviene continuar o esperar.' } }));
+        }
+      }
+      if (storm) currentResources.energy = Math.max(0, currentResources.energy - delta * (design.power === 'solar' ? 0.08 : 0.04));
+
       if (elapsed - lastHudUpdate > 0.2) {
         lastHudUpdate = elapsed;
         const currentTarget = getBody(selectedNow);
@@ -1088,7 +1388,7 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
         setSpeed(currentSpeed);
         setResources({ ...currentResources });
         const critical = [currentResources.fuel, currentResources.energy, currentResources.integrity, currentResources.communications].some((value) => value <= 20);
-        if (critical && !resourceWarningRef.current) { playSound('warning'); resourceWarningRef.current = true; }
+        if (critical && !resourceWarningRef.current) { playSound('warning'); resourceWarningRef.current = true; window.dispatchEvent(new CustomEvent('orbital-commander-transmission', { detail: { id: 'resource-warning', title: 'RECURSO CRÍTICO', text: 'Tenemos un recurso en nivel crítico. Revisa la telemetría y decide cómo continuar; todavía podemos proteger la misión si actuamos con calma.' } })); }
         else if (!critical) resourceWarningRef.current = false;
         if (elapsed % 5 < 0.25) saveExplorationResources(mission.id, currentResources);
       }
@@ -1108,7 +1408,10 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
 
     return () => {
       window.cancelAnimationFrame(animationId);
+      stopEngine();
       window.clearTimeout(toastTimer);
+      window.clearTimeout(acquisitionTimer);
+      window.clearTimeout(narrativeTimer);
       resizeObserver.disconnect();
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
@@ -1126,15 +1429,22 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
       window.removeEventListener('orbital-transmit-results', onTransmit);
       window.removeEventListener('orbital-transmit-orbit-results', onTransmitOrbital);
       window.removeEventListener('orbital-scan-sector', onScanOrbital);
+      window.removeEventListener('orbital-lab-record', onLabRecord);
+      window.removeEventListener('orbital-transmit-data', onTransmitData);
       window.removeEventListener('orbital-set-mode', onSetMode);
-      renderer.dispose();
+      window.removeEventListener('orbital-toggle-walking', onToggleWalking);
+      window.removeEventListener('orbital-capture-photo', onCapturePhoto);
+      window.removeEventListener('orbital-deploy-sensor', onDeploySensor);
+      window.removeEventListener('orbital-deploy-satellite', onDeploySatellite);
+      detachQuality(); renderer.dispose();
       renderer.domElement.remove();
       scene.traverse((object) => {
         if (object instanceof THREE.Mesh || object instanceof THREE.Points || object instanceof THREE.Line) {
           object.geometry.dispose();
           const material = object.material;
-          if (Array.isArray(material)) material.forEach((item) => item.dispose());
-          else material.dispose();
+          const disposeMaterial = (item: THREE.Material) => { if ('map' in item && item.map instanceof THREE.Texture) item.map.dispose(); item.dispose(); };
+          if (Array.isArray(material)) material.forEach(disposeMaterial);
+          else disposeMaterial(material);
         }
       });
     };
@@ -1142,7 +1452,7 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
 
   const selectedBody = celestialBodies.find((body) => body.id === selectedId);
   const selectedName = selectedBody?.name ?? (selectedId === 'sun' ? 'Sol' : mission.destination);
-  const landingAllowed = mission.id === 'moon' && Boolean(selectedBody?.landing) && selectedId === 'moon';
+  const landingAllowed = supportsSurface && Boolean(selectedBody?.landing) && selectedId === mission.targetBodyId;
   const tutorialActive = mission.id === 'moon' && !tutorialDismissed && !progress.transmitted;
   const tutorialStep = getTutorialStep(progress, mode, resources, atStation);
   const tutorialStepNumber = tutorialOrder.indexOf(tutorialStep.id) + 1;
@@ -1158,7 +1468,7 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
   };
 
   const startTravel = () => {
-    const targetId = progress.landed && mission.id === 'moon' ? 'moon' : selectedId;
+    const targetId = progress.landed && supportsSurface ? mission.targetBodyId : selectedId;
     const body = celestialBodies.find((item) => item.id === targetId);
     if (!body && targetId !== 'sun') {
       setMessage('Selecciona un cuerpo con una órbita de observación definida.');
@@ -1175,7 +1485,7 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
       return;
     }
     setExplorationMode(next);
-    if (next === 'surface') setMessage('Superficie lunar aproximada · conduce hasta los marcadores y pulsa E para investigar.');
+    if (next === 'surface') setMessage(`Superficie simulada de ${mission.destination} · conduce hasta los marcadores y pulsa E para investigar.`);
     else if (next === 'orbit') setMessage('Modo orbital: arrastra para girar la cámara y usa la rueda para acercarte.');
     else setMessage('Navegación libre activa.');
   };
@@ -1186,16 +1496,20 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
     if (resources.communications < 12 || resources.energy < 5) { setMessage('Enlace no disponible: faltan energía o capacidad de comunicación.'); return; }
     setTransmissionCountdown(4);
     setTransmissionType('lunar');
-    setMessage('Uplink lunar iniciado · retraso de señal simulado: 4 s.');
+    setMessage('Uplink de superficie iniciado · retraso de señal simulado: 4 s.');
   };
 
   const transmitOrbital = () => {
     if (!orbitalSurvey.arrived || orbitalSurvey.scannedRegions.length < 3 || orbitalSurvey.transmitted) return;
     if (mode !== 'orbit' || selectedId !== mission.targetBodyId) { setMessage(`Vuelve a la órbita de ${mission.destination} para transmitir.`); return; }
     if (resources.communications < 15 || resources.energy < 5) { setMessage('Uplink no disponible: faltan energía o capacidad de comunicación.'); return; }
-    setTransmissionCountdown(3);
+    if (windowCooldown > 0) { setMessage('Espera la siguiente ventana de comunicación.'); return; }
+    if (resources.storage * hulls[design.ship].storage / 100 > radios[design.radio].data + 0.0001) { setMessage('El paquete supera esta ventana. Transmite paquetes parciales para liberar datos.'); return; }
+    const signalSeconds = estimatedSignalSeconds(mission.id, resources.elapsedMinutes / 1440);
+    const displaySeconds = compressedTransmissionSeconds(signalSeconds);
+    setTransmissionCountdown(displaySeconds);
     setTransmissionType('orbital');
-    setMessage(`Uplink de ${mission.destination} iniciado · retraso de comunicación simulado: 3 s.`);
+    setMessage(`Tiempo de luz estimado de ida: ${signalSeconds < 60 ? `${signalSeconds.toFixed(1)} s` : `${(signalSeconds / 60).toFixed(1)} min`}. Espera de juego comprimida: ${displaySeconds} s.`);
   };
 
   useEffect(() => {
@@ -1228,34 +1542,43 @@ export default function ExplorationScene({ mission, onExit, shipId }: Props) {
   };
 
   return (
-    <section className="exploration-view" aria-label="Exploración espacial 3D">
-      <div className="exploration-stage" ref={hostRef} />
+    <section data-visualization="exploration" className="exploration-view" aria-label="Exploración espacial 3D">
+      <div className="exploration-stage" ref={hostRef} /><FullscreenControl label="exploración espacial" />
+      {firstLook && <div className="first-look"><div className="first-look-window" /><div className="first-look-title"><span>LA PRIMERA MIRADA</span><strong>Un solo hogar</strong></div><button onClick={() => { writeStorage('orbital-command-first-look-v1', 'done'); setFirstLook(false); }}>CONTINUAR →</button></div>}
       <div className="explore-topbar"><button className="explore-back" onClick={onExit}>← CENTRO DE MISIÓN</button><div><span className="live-dot" /> EXPLORACIÓN 3D <small>· {mode === 'surface' ? 'SUPERFICIE' : mode === 'orbit' ? 'ÓRBITA' : cockpit ? 'CABINA' : 'VUELO LIBRE'}</small></div><span className="explore-coords">{speed.toFixed(1)} <small>m/s</small></span></div>
       {hazardWarning && <div className={`flight-warning ${hazardWarning.startsWith('ADVERTENCIA') ? 'caution' : 'blocked'}`} role="alert"><span>⚠</span>{hazardWarning}</div>}
+      {dustStorm && <div className="dust-storm-warning" role="status">TORMENTA DE POLVO SIMULADA · VISIBILIDAD Y ENERGÍA REDUCIDAS</div>}
       {landingInProgress && <div className="landing-overlay" role="status"><span>SECUENCIA DE DESCENSO</span><b>Frenado orbital y aproximación</b><div><i /></div><small>CONTROL AUTOMÁTICO · MANTÉN LA TELEMETRÍA A LA VISTA</small></div>}
       <aside className="explore-target-panel">
         <span className="eyebrow">NAVEGACIÓN · DESTINO</span>
         <h2>{selectedName}</h2>
         <p>{selectedBody?.fact ?? 'La estrella central del sistema: objetivo de observación remota.'}</p>
         <div className="target-metrics"><div><small>DISTANCIA</small><b>{distance.toFixed(1)} <i>u.e.</i></b></div><div><small>CAMPAÑA</small><b>{mission.name}</b></div></div>
-        {mode === 'flight' && <button className={`primary-button explore-action ${tutorialActive && ['travel', 'surface'].includes(tutorialStep.id) ? 'guided-action' : ''}`} onClick={startTravel}>{progress.landed && mission.id === 'moon' ? 'VOLVER A LA LUNA' : 'INICIAR RUTA'} <b>↗</b></button>}
-        {mode === 'orbit' && mission.id === 'moon' && selectedId === 'moon' && !progress.landed && <div className="landing-selector"><label htmlFor="landing-zone">ZONA DE DESCENSO</label><select className={tutorialActive && tutorialStep.id === 'landing-zone' ? 'guided-action' : ''} id="landing-zone" value={landingZoneId} disabled={landingInProgress} onChange={(event) => selectLandingZone(event.target.value)}>{landingZones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}</select><small>{selectedZone.description}</small><button className={`primary-button explore-action ${tutorialActive && tutorialStep.id === 'land' ? 'guided-action' : ''}`} onClick={beginLanding} disabled={!progress.arrived || resources.fuel < 12 || landingInProgress}>{landingInProgress ? 'DESCENSO EN CURSO…' : 'INICIAR ATERRIZAJE'} <b>↘</b></button><span className="landing-note">DESCENSO GUIADO · 12% COMBUSTIBLE · 2% INTEGRIDAD</span></div>}
-        {mode === 'orbit' && mission.id === 'moon' && progress.landed && <button className={`primary-button explore-action ${tutorialActive && tutorialStep.id === 'surface' ? 'guided-action' : ''}`} onClick={() => enterOrbitOrSurface('surface')}>VOLVER AL SITIO DEL ROVER <b>↓</b></button>}
-        {mode === 'orbit' && !(mission.id === 'moon' && selectedId === 'moon') && <button className="secondary-button explore-action" onClick={() => enterOrbitOrSurface('flight')}>RETOMAR VUELO <b>↗</b></button>}
-        {mode === 'surface' && <button className="secondary-button explore-action" onClick={() => enterOrbitOrSurface('orbit')}>REGRESAR A ÓRBITA <b>↑</b></button>}
+        {mode === 'flight' && <button className={`primary-button explore-action ${tutorialActive && ['travel', 'surface'].includes(tutorialStep.id) ? 'guided-action' : ''}`} onClick={startTravel}>{progress.landed && supportsSurface ? `VOLVER A ${mission.destination.toUpperCase()}` : 'INICIAR RUTA'} <b>↗</b></button>}
+        {mode === 'orbit' && supportsSurface && selectedId === mission.targetBodyId && !progress.landed && <div className="landing-selector"><label htmlFor="landing-zone">ZONA DE DESCENSO</label><select className={tutorialActive && tutorialStep.id === 'landing-zone' ? 'guided-action' : ''} id="landing-zone" value={landingZoneId} disabled={landingInProgress} onChange={(event) => selectLandingZone(event.target.value)}>{landingZones.map((zone) => <option key={zone.id} value={zone.id}>{zone.name}</option>)}</select><small>{selectedZone.description}</small><button className={`primary-button explore-action ${tutorialActive && tutorialStep.id === 'land' ? 'guided-action' : ''}`} onClick={beginLanding} disabled={!progress.arrived || resources.fuel < 12 || resources.energy < 3 || landingInProgress}>{landingInProgress ? 'DESCENSO EN CURSO…' : 'INICIAR ATERRIZAJE'} <b>↘</b></button><span className="landing-note">DESCENSO GUIADO · 12% COMBUSTIBLE · 3% ENERGÍA · 2% INTEGRIDAD</span></div>}
+        {mode === 'orbit' && supportsSurface && selectedId === mission.targetBodyId && progress.landed && <button className={`primary-button explore-action ${tutorialActive && tutorialStep.id === 'surface' ? 'guided-action' : ''}`} onClick={() => enterOrbitOrSurface('surface')}>VOLVER AL SITIO DEL ROVER <b>↓</b></button>}
+        {mode === 'orbit' && !(supportsSurface && selectedId === mission.targetBodyId) && <button className="secondary-button explore-action" onClick={() => enterOrbitOrSurface('flight')}>RETOMAR VUELO <b>↗</b></button>}
+        {mode === 'surface' && <button className="secondary-button explore-action" disabled={onFoot} title={onFoot ? 'Vuelve primero al rover' : undefined} onClick={() => enterOrbitOrSurface('orbit')}>REGRESAR A ÓRBITA <b>↑</b></button>}
         {mode === 'flight' && selectedBody && <small className="landing-note">{landingAllowed ? 'DESTINO COMPATIBLE CON DESCENSO' : 'OBSERVACIÓN ORBITAL · SIN DESCENSO'}</small>}
       </aside>
       <aside className="resource-panel" aria-label="Recursos de exploración"><div className="resource-panel-title"><span className="eyebrow">TELEMETRÍA DE MISIÓN</span><small>T+ {Math.floor(resources.elapsedMinutes / 60).toString().padStart(2, '0')}:{Math.floor(resources.elapsedMinutes % 60).toString().padStart(2, '0')}</small></div>{([['fuel', 'COMBUSTIBLE'], ['energy', 'ENERGÍA'], ['integrity', 'INTEGRIDAD'], ['storage', 'DATOS'], ['communications', 'ENLACE']] as const).map(([key, label]) => <div className="resource-row" key={key}><span>{label}</span><div className="resource-track"><i className={resources[key] < 20 ? 'critical' : ''} style={{ width: `${resources[key]}%` }} /></div><b>{Math.round(resources[key])}%</b></div>)}{Object.values(resources).slice(0, 3).some((value) => value <= 20) && <small className="resource-alert">⚠ RECURSO EN NIVEL CRÍTICO</small>}{resources.fuel < 15 && <button className="restart-mission-button" onClick={() => setConfirmRestart(true)}>COMBUSTIBLE CRÍTICO · REINICIAR CAMPAÑA</button>}{mode === 'surface' && atStation && <small className="station-status">ANTENA / RECARGA · AL ALCANCE</small>}</aside>
       {confirmRestart && <div className="restart-confirm" role="alertdialog" aria-modal="true" aria-label="Confirmar reinicio de campaña"><b>¿Reiniciar {mission.name}?</b><p>La nave y los recursos volverán a la base terrestre. Se perderán los objetivos y descubrimientos guardados de esta campaña.</p><div><button onClick={() => setConfirmRestart(false)}>CANCELAR</button><button className="restart-confirm-accept" onClick={restartMission}>REINICIAR DESDE TIERRA</button></div></div>}
-      {mission.id === 'moon' && <aside className="surface-objectives"><div className="objective-heading"><div><span className="eyebrow">LUNAR FRONTIER · OBJETIVOS</span><b>{progressSummary.percent}%</b></div><div className="objective-progress"><i style={{ width: `${progressSummary.percent}%` }} /></div></div>{lunarObjectives.filter((objective) => !(objective.id === 'samples' && objective.complete(progress) && !samplesJustCompleted)).map((objective, index) => { const complete = objective.complete(progress); const detail = objective.id === 'scan' ? `${progress.scannedRocks.length}/3` : objective.id === 'samples' ? `${progress.collectedSamples.length}/3` : complete ? 'LISTO' : 'PENDIENTE'; return <div className={`objective-row ${complete ? 'complete' : ''}`} key={objective.id}><span>{complete ? '✓' : String(index + 1).padStart(2, '0')}</span>{objective.label}<b>{detail}</b></div>; })}{mode === 'surface' && <div className="surface-activity">{atStation ? 'ESTACIÓN AL ALCANCE · PULSA E PARA ANALIZAR / RECARGAR' : 'CONDUCE HASTA UN BEACON O LA ESTACIÓN'}</div>}{progress.analyzed && !progress.transmitted && mode === 'surface' && <button className={`primary-button transmit-button ${tutorialActive && tutorialStep.id === 'transmit' ? 'guided-action' : ''}`} disabled={!atStation || transmissionCountdown > 0} onClick={transmit}>{transmissionCountdown > 0 ? `UPLINK EN CURSO · ${transmissionCountdown} s` : atStation ? 'TRANSMITIR RESULTADOS · 4 s' : 'REGRESA A LA ANTENA'} <b>↑</b></button>}{progress.transmitted && <strong className="mission-success">MISIÓN COMPLETADA · +180 XP</strong>}</aside>}
+      {(mission.id === 'moon' || supportsSurface && mode === 'surface') && <aside className="surface-objectives"><div className="objective-heading"><div><span className="eyebrow">{mission.name} · OBJETIVOS</span><b>{progressSummary.percent}%</b></div><div className="objective-progress"><i style={{ width: `${progressSummary.percent}%` }} /></div></div>{lunarObjectives.filter((objective) => !(objective.id === 'samples' && objective.complete(progress) && !samplesJustCompleted)).map((objective, index) => { const complete = objective.complete(progress); const detail = objective.id === 'scan' ? `${progress.scannedRocks.length}/3` : objective.id === 'samples' ? `${progress.collectedSamples.length}/3` : complete ? 'LISTO' : 'PENDIENTE'; return <div className={`objective-row ${complete ? 'complete' : ''}`} key={objective.id}><span>{complete ? '✓' : String(index + 1).padStart(2, '0')}</span>{objective.id === 'arrival' ? `Llegar a ${mission.destination}` : objective.label}<b>{detail}</b></div>; })}{mode === 'surface' && <div className="surface-activity">{atStation ? 'ESTACIÓN AL ALCANCE · PULSA E PARA ANALIZAR / RECARGAR' : 'CONDUCE HASTA UN BEACON O LA ESTACIÓN'}</div>}{progress.analyzed && !progress.transmitted && mode === 'surface' && <button className={`primary-button transmit-button ${tutorialActive && tutorialStep.id === 'transmit' ? 'guided-action' : ''}`} disabled={!atStation || transmissionCountdown > 0} onClick={transmit}>{transmissionCountdown > 0 ? `UPLINK EN CURSO · ${transmissionCountdown} s` : atStation ? 'TRANSMITIR RESULTADOS · 4 s' : 'REGRESA A LA ANTENA'} <b>↑</b></button>}{progress.transmitted && <strong className="mission-success">MISIÓN COMPLETADA · +{mission.reward} XP</strong>}</aside>}
       {mode === 'surface' && selectedPoi && <aside className="poi-context"><span className="eyebrow">OBJETO CIENTÍFICO · INTERACCIÓN</span><b>{selectedPoi.name}</b><small>{selectedPoi.kind === 'station' ? atStation ? 'Estación al alcance. Analiza las muestras o recarga sistemas.' : 'Conduce hasta la antena para usar el laboratorio.' : progress.collectedSamples.includes(selectedPoi.index) ? 'Muestra recolectada · sitio documentado.' : progress.scannedRocks.includes(selectedPoi.index) ? 'Composición registrada · puedes recolectar una muestra.' : 'Afloramiento sin analizar · activa el espectrómetro a corta distancia.'}</small><button className={`secondary-button ${tutorialActive && ((tutorialStep.id === 'scan' && selectedPoi.kind === 'rock' && !progress.scannedRocks.includes(selectedPoi.index)) || (tutorialStep.id === 'sample' && selectedPoi.kind === 'rock' && progress.scannedRocks.includes(selectedPoi.index)) || (tutorialStep.id === 'analyze' && selectedPoi.kind === 'station')) ? 'guided-action' : ''}`} onClick={interactWithPoi}>{selectedPoi.kind === 'station' ? progress.scannedRocks.length >= 3 && progress.collectedSamples.length >= 3 ? 'ANALIZAR / RECARGAR' : 'RECARGAR SISTEMAS' : progress.scannedRocks.includes(selectedPoi.index) ? 'RECOLECTAR MUESTRA' : 'ESCANEAR FORMACIÓN'} <b>↗</b></button></aside>}
+      {mode === 'orbit' && selectedId === mission.targetBodyId && <button className="lab-open-button" onClick={() => setLabOpen(true)}>ABRIR LABORATORIO 3D · {labReadings.length} LECTURAS</button>}
+      {mode === 'orbit' && mission.id === 'earth' && selectedId === 'earth' && !satelliteDeployed && <button className="satellite-button" onClick={() => window.dispatchEvent(new Event('orbital-deploy-satellite'))}>DESPLEGAR SATÉLITE · 5% ENERGÍA</button>}
+      {mode === 'surface' && ['moon', 'mars'].includes(mission.id) && <button className="lab-open-button" onClick={() => window.dispatchEvent(new Event('orbital-toggle-walking'))}>{onFoot ? 'VOLVER AL ROVER' : 'BAJAR DEL ROVER · CAMINAR'}</button>}
+      {(mode === 'surface' || mode === 'orbit') && <button className="science-camera-button" onClick={() => window.dispatchEvent(new Event('orbital-capture-photo'))}>FOTOGRAFIAR · {photoCount}</button>}
+      {mode === 'surface' && <button className="surface-sensor-button" disabled={sensors.length >= 3 || labReadings.length >= 24 || resources.energy < 5 || resources.storage > 95} onClick={() => window.dispatchEvent(new Event('orbital-deploy-sensor'))}>INSTALAR SENSOR · {sensors.length}/3</button>}
+      {labOpen && <PlanetaryLab bodyId={mission.targetBodyId} destination={mission.destination} instrument={design.instrument} canRecord={resources.energy >= scanEnergy / 2 && resources.storage + scanStorage / 3 <= 100 && labReadings.length < 24} onRecord={(reading) => window.dispatchEvent(new CustomEvent('orbital-lab-record', { detail: reading }))} onClose={() => setLabOpen(false)} />}
       {tutorialActive && <aside className="tutorial-coach" role="status"><span className="tutorial-step-tag">TUTORIAL · {tutorialStep.id === 'complete' ? 'LISTO' : `${tutorialStepNumber}/${tutorialOrder.length - 1}`}</span><div className="tutorial-coach-main"><span className="tutorial-coach-arrow" aria-hidden="true">➤</span><div><b>{tutorialStep.title}</b><p>{tutorialStep.instruction}</p></div></div><button onClick={dismissTutorial}>OMITIR TUTORIAL</button></aside>}
       {tutorialActive && tutorialPointer?.visible && mode === 'surface' && <div className="tutorial-world-arrow" style={{ left: tutorialPointer.x, top: tutorialPointer.y, '--guide-angle': `${tutorialPointer.angle}deg` } as CSSProperties} aria-hidden="true"><span>➤</span><small>{tutorialStep.id === 'station' || tutorialStep.id === 'antenna' ? 'ESTACIÓN' : 'OBJETIVO'}</small></div>}
-      {mission.id !== 'moon' && <aside className="surface-objectives orbital-objectives"><div className="objective-heading"><div><span className="eyebrow">{mission.name} · CIENCIA ORBITAL</span><b>{orbitalProgressPercent}%</b></div><div className="objective-progress"><i style={{ width: `${orbitalProgressPercent}%` }} /></div></div><div className={`objective-row ${orbitalSurvey.arrived ? 'complete' : ''}`}><span>{orbitalSurvey.arrived ? '✓' : '01'}</span>Establecer órbita en {mission.destination}<b>{orbitalSurvey.arrived ? 'LISTO' : 'PENDIENTE'}</b></div><div className={`objective-row ${orbitalSurvey.scannedRegions.length >= 3 ? 'complete' : ''}`}><span>{orbitalSurvey.scannedRegions.length >= 3 ? '✓' : '02'}</span>Escanear sectores científicos<b>{orbitalSurvey.scannedRegions.length}/3</b></div>{orbitalSurvey.scannedRegions.length > 0 && <small className="orbit-last-scan">ÚLTIMO DATO · {campaignRegions[orbitalSurvey.scannedRegions[orbitalSurvey.scannedRegions.length - 1]]}</small>}{mode === 'orbit' && <button className="secondary-button orbital-scan-button" disabled={!orbitalSurvey.arrived || selectedId !== mission.targetBodyId || orbitalSurvey.scannedRegions.length >= 3 || resources.energy < 10 || resources.storage > 91} onClick={() => window.dispatchEvent(new Event('orbital-scan-sector'))}>ACTIVAR INSTRUMENTO · E <b>⌁</b></button>}{orbitalSurvey.arrived && <div className={`objective-row ${orbitalSurvey.transmitted ? 'complete' : ''}`}><span>{orbitalSurvey.transmitted ? '✓' : '03'}</span>Transmitir informe<b>{orbitalSurvey.transmitted ? 'COMPLETO' : `${orbitalSurvey.scannedRegions.length}/3`}</b></div>}{orbitalSurvey.arrived && !orbitalSurvey.transmitted && orbitalSurvey.scannedRegions.length >= 3 && mode === 'orbit' && <button className="primary-button transmit-button" disabled={transmissionCountdown > 0 || selectedId !== mission.targetBodyId} onClick={transmitOrbital}>{transmissionCountdown > 0 ? `UPLINK · ${transmissionCountdown} s` : 'TRANSMITIR INFORME · 3 s'} <b>↑</b></button>}{orbitalSurvey.transmitted && <strong className="mission-success">CAMPAÑA COMPLETADA · +{mission.reward} XP</strong>}</aside>}
-      <div className="explore-bottom-left"><span className="keycap">W</span><span className="keycap">A</span><span className="keycap">S</span><span className="keycap">D</span><small>{mode === 'surface' ? 'CONDUCIR' : 'VOLAR'}</small>{(mode === 'surface' || mode === 'orbit' && mission.id !== 'moon') && <><span className="keycap">E</span><small>{mode === 'orbit' ? 'ESCANEAR' : 'ANALIZAR'}</small></>}<span className="keycap">SHIFT</span><small>IMPULSO</small><span className="keycap">F</span><small>CABINA</small></div>
+      {mission.id !== 'moon' && !(supportsSurface && mode === 'surface') && <aside className="surface-objectives orbital-objectives"><div className="objective-heading"><div><span className="eyebrow">{mission.name} · CIENCIA ORBITAL</span><b>{orbitalProgressPercent}%</b></div><div className="objective-progress"><i style={{ width: `${orbitalProgressPercent}%` }} /></div></div><div className={`objective-row ${orbitalSurvey.arrived ? 'complete' : ''}`}><span>{orbitalSurvey.arrived ? '✓' : '01'}</span>Establecer órbita en {mission.destination}<b>{orbitalSurvey.arrived ? 'LISTO' : 'PENDIENTE'}</b></div><div className={`objective-row ${orbitalSurvey.scannedRegions.length >= 3 ? 'complete' : ''}`}><span>{orbitalSurvey.scannedRegions.length >= 3 ? '✓' : '02'}</span>Escanear sectores científicos<b>{orbitalSurvey.scannedRegions.length}/3</b></div>{orbitalSurvey.scannedRegions.length > 0 && <small className="orbit-last-scan">ÚLTIMO DATO · {campaignRegions[orbitalSurvey.scannedRegions[orbitalSurvey.scannedRegions.length - 1]]}</small>}{mode === 'orbit' && <button className="secondary-button orbital-scan-button" disabled={!orbitalSurvey.arrived || selectedId !== mission.targetBodyId || mission.id === 'earth' && !satelliteDeployed || orbitalSurvey.scannedRegions.length >= 3 || resources.energy < scanEnergy || resources.storage + scanStorage > 100} onClick={() => window.dispatchEvent(new Event('orbital-scan-sector'))}>ACTIVAR INSTRUMENTO · E <b>⌁</b></button>}{mode === 'orbit' && selectedId === mission.targetBodyId && resources.storage > 0 && <><label className="data-priority">Prioridad de datos<select aria-label="Prioridad de datos" value={dataPriority} onChange={(event) => setDataPriority(event.target.value as DataKind)}><option value="observations">Observaciones · {(buffers.observations * hulls[design.ship].storage / 100).toFixed(1)} u</option><option value="sensors">Sensores · {(buffers.sensors * hulls[design.ship].storage / 100).toFixed(1)} u</option><option value="telemetry">Telemetría · {(buffers.telemetry * hulls[design.ship].storage / 100).toFixed(1)} u</option></select></label><button className="secondary-button orbital-scan-button" disabled={windowCooldown > 0 || buffers[dataPriority] <= 0} onClick={() => window.dispatchEvent(new CustomEvent('orbital-transmit-data', { detail: dataPriority }))}>TRANSMITIR PAQUETE · {windowCooldown > 0 ? `ESPERA ${windowCooldown} s` : 'LIBERAR DATOS ↑'}</button></>}{orbitalSurvey.arrived && <div className={`objective-row ${orbitalSurvey.transmitted ? 'complete' : ''}`}><span>{orbitalSurvey.transmitted ? '✓' : '03'}</span>Transmitir informe<b>{orbitalSurvey.transmitted ? 'COMPLETO' : `${orbitalSurvey.scannedRegions.length}/3`}</b></div>}{orbitalSurvey.arrived && !orbitalSurvey.transmitted && orbitalSurvey.scannedRegions.length >= 3 && mode === 'orbit' && <button className="primary-button transmit-button" disabled={transmissionCountdown > 0 || windowCooldown > 0 || selectedId !== mission.targetBodyId} onClick={transmitOrbital}>{transmissionCountdown > 0 ? `UPLINK · ${transmissionCountdown} s` : 'TRANSMITIR INFORME'} <b>↑</b></button>}{orbitalSurvey.transmitted && <strong className="mission-success">CAMPAÑA COMPLETADA · +{mission.reward} XP</strong>}</aside>}
+      <div className="explore-bottom-left"><span className="keycap">W</span><span className="keycap">A</span><span className="keycap">S</span><span className="keycap">D</span><small>{mode === 'surface' ? onFoot ? 'CAMINAR' : 'CONDUCIR' : 'VOLAR'}</small>{(mode === 'surface' || mode === 'orbit' && mission.id !== 'moon') && <><span className="keycap">E</span><small>{mode === 'orbit' ? 'ESCANEAR' : 'ANALIZAR'}</small></>}<span className="keycap">SHIFT</span><small>IMPULSO</small><span className="keycap">F</span><small>CABINA</small></div>
       <div className="explore-bottom-right"><span>ARRASTRAR · ORIENTAR</span><span>RUEDA · ZOOM</span><span>CLIC EN UN ASTRO · SELECCIONAR</span></div>
+      {acquisition && <div className="acquisition-result" role="status"><strong>Registro científico guardado</strong><span>{acquisition.data.toFixed(1)} unidades de datos añadidas</span><small>Energía utilizada: {acquisition.energy.toFixed(1)}% · {instruments[design.instrument].name}</small><small>Resultado de la simulación. Transmite los datos para incorporarlos al informe.</small></div>}
       {message && <div className="explore-toast" role="status">{message}</div>}
-      <div className="explore-model-note">MODELO EDUCATIVO · DISTANCIAS Y VELOCIDADES SIMPLIFICADAS</div>
+      <div className="explore-model-note">VUELO 3D COMPRIMIDO · DISTANCIAS Y TIEMPO NO A ESCALA</div>
     </section>
   );
 }
