@@ -1,6 +1,6 @@
 # Seguridad: alcance y evidencia
 
-Revisión del 12 de noviembre de 2026 para la aplicación local estática. El navegador ejecuta React y Three.js; el proyecto no incluye cuentas, API propia ni base de datos. La puntuación, el progreso y los informes en `localStorage` son datos manipulables por el usuario, no registros confiables ni secretos.
+Revisión del 12 de noviembre de 2026 para la aplicación local estática. El navegador ejecuta React y Three.js; el proyecto no incluye cuentas, API propia ni base de datos; solo consulta las APIs públicas de NASA en modo lectura. La puntuación, el progreso y los informes en `localStorage` son datos manipulables por el usuario, no registros confiables ni secretos.
 
 | Control | Estado y evidencia |
 | --- | --- |
@@ -11,6 +11,7 @@ Revisión del 12 de noviembre de 2026 para la aplicación local estática. El na
 | Flujo de publicación | Las acciones están fijadas por SHA, el checkout no persiste credenciales y los permisos de Pages e identidad se conceden al job de despliegue. `actionlint` pasó. El workflow no se ejecutó ni se publicó desde esta revisión. |
 | Secretos | La búsqueda estática de patrones de claves privadas, claves AWS y tokens GitHub no encontró coincidencias en los archivos del proyecto. Es una revisión parcial y no garantiza que no existan otros secretos. |
 | Acceso local | El lanzador del gestor usa `127.0.0.1` y el puerto asignado; no expone deliberadamente Vite a otras interfaces. Para producción se necesita una revisión del proveedor y su configuración. |
+| APIs de NASA | La CSP de producción solo añade `connect-src https://api.nasa.gov` e `img-src https://apod.nasa.gov`. Las respuestas se validan (tipos, fechas y hosts https de NASA; `tests/nasa.test.mjs`) y se renderizan con React, sin HTML de terceros; los vídeos solo se enlazan, no se incrustan. La clave `VITE_NASA_API_KEY` queda visible en el cliente; se usa `DEMO_KEY` por defecto. |
 | Voz | La síntesis usa las voces que proporciona el navegador o el sistema. Su disponibilidad, calidad y procesamiento dependen de ese entorno. |
 
 No hay autenticación, autorización ni sesiones de servidor que probar en esta versión. Si se añaden cuentas, datos personales, API o servicios externos, deben diseñarse y probarse esos controles antes de habilitarlos. No se ha realizado una auditoría independiente ni se declara cumplimiento normativo.

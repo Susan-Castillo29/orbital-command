@@ -33,6 +33,15 @@ npm test
 
 Abre la URL local que indique Vite. Para la prueba de navegador del workspace, inicia primero el proyecto con el gestor y ejecuta `npm run test:browser`; usa el Playwright de `infraestructura/herramientas-locales/browser`. Puede cambiarse la dirección con `ORBITAL_TEST_URL` y la ruta del módulo con `ORBITAL_PLAYWRIGHT_MODULE`.
 
+## Datos reales de NASA
+
+La pantalla **NASA** del menú lateral usa las APIs abiertas de [api.nasa.gov](https://api.nasa.gov):
+
+- **APOD**: la imagen astronómica del día (con selector de fecha desde 1995). Si el contenido del día es un vídeo, se enlaza al sitio de NASA.
+- **NeoWs**: asteroides cercanos a la Tierra con máxima aproximación en los próximos 7 días, con distancia (en distancias lunares), tamaño estimado y velocidad.
+
+Por defecto se usa `DEMO_KEY` (límite bajo por IP). Para una clave personal gratuita, créala en api.nasa.gov y guárdala en `.env.local` como `VITE_NASA_API_KEY=...`; al ser un sitio estático, la clave quedará visible en el navegador, así que no uses una clave con privilegios. Las respuestas se validan, solo se muestran imágenes de `apod.nasa.gov` y se guardan en caché local (1 h APOD de hoy, 6 h asteroides) para respetar el límite. Sin conexión o con el límite agotado se muestra la última copia guardada o un aviso con opción de reintentar. A diferencia del resto del juego, estos datos **son reales**.
+
 ## Controles de exploración
 
 - Arrastrar con el botón izquierdo: orientar nave; en órbita, girar cámara; en superficie, orientar el rover.

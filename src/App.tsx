@@ -18,6 +18,7 @@ const ExplorationScene = lazy(() => import('./components/ExplorationScene'));
 const MissionEngineering = lazy(() => import('./components/MissionEngineering'));
 const MissionTransit = lazy(() => import('./components/MissionTransit'));
 const MissionReports = lazy(() => import('./components/MissionReports'));
+const NasaObservatory = lazy(() => import('./components/NasaObservatory'));
 
 const savedMission = typeof window === 'undefined' ? null : readStorage('orbital-command-mission');
 const savedPlayer = typeof window === 'undefined' ? initialPlayerProgress : loadPlayerProgress();
@@ -25,7 +26,7 @@ const initialMission = missions.find((mission) => mission.id === savedMission &&
 
 function App() {
   const [mission, setMission] = useState<Mission>(initialMission);
-  const [screen, setScreen] = useState<'home' | 'mission' | 'engineering' | 'transit' | 'exploration' | 'reports'>('home');
+  const [screen, setScreen] = useState<'home' | 'mission' | 'engineering' | 'transit' | 'exploration' | 'reports' | 'nasa'>('home');
   const [design, setDesign] = useState<MissionDesign>(initialDesign);
   const [arrival, setArrival] = useState<TransitState | null>(null);
   const [notice, setNotice] = useState('');
@@ -86,6 +87,7 @@ function App() {
           <button className={`rail-button ${screen === 'mission' ? 'active' : ''}`} onClick={() => setScreen('mission')} aria-label="Expediente de misión" title="Expediente de misión"><span>◎</span><small>EXPEDIENTE</small></button>
           <button className={`rail-button ${screen === 'exploration' || screen === 'engineering' || screen === 'transit' ? 'active' : ''}`} onClick={() => setScreen('engineering')} aria-label="Preparar exploración" title="Preparar exploración"><span>✦</span><small>EXPLORAR</small></button>
           <button className={`rail-button ${screen === 'reports' ? 'active' : ''}`} onClick={() => setScreen('reports')} aria-label="Informes científicos" title="Informes científicos"><span>▤</span><small>INFORMES</small></button>
+          <button className={`rail-button ${screen === 'nasa' ? 'active' : ''}`} onClick={() => setScreen('nasa')} aria-label="Datos reales de NASA" title="Datos reales de NASA: imagen del día y asteroides cercanos"><span>☄</span><small>NASA</small></button>
           <div className="rail-spacer" />
           <button className="rail-button rail-help" aria-label="Ayuda" title="Ayuda: arrastra para girar, rueda para acercar, clic en un planeta para elegir destino" onClick={() => { setNotice('Consejo: arrastra para girar el sistema, usa la rueda para acercarte y selecciona un planeta con clic.'); window.setTimeout(() => setNotice(''), 5000); }}><span>?</span><small>AYUDA</small></button>
           <div className="rail-avatar">OC</div>
@@ -154,6 +156,8 @@ function App() {
           <MissionTransit key={mission.id} mission={mission} design={design} onCancel={() => setScreen('engineering')} onArrive={(state) => { setArrival(state); setScreen('exploration'); }} />
         ) : screen === 'reports' ? (
           <MissionReports onExit={() => setScreen('home')} />
+        ) : screen === 'nasa' ? (
+          <NasaObservatory onExit={() => setScreen('home')} />
         ) : (
           <ExplorationScene mission={mission} onExit={() => setScreen('home')} shipId={shipId} design={design} arrival={arrival} />
         )}

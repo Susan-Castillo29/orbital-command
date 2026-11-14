@@ -7,7 +7,7 @@ export default defineConfig({
     name: 'orbital-production-csp',
     apply: 'build',
     transformIndexHtml() {
-      return [{ tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" }, injectTo: 'head-prepend' }];
+      return [{ tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://apod.nasa.gov; media-src 'self' blob:; connect-src 'self' https://api.nasa.gov; object-src 'none'; base-uri 'self'; form-action 'self'" }, injectTo: 'head-prepend' }];
     },
   }],
   build: {

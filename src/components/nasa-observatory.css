@@ -1,0 +1,33 @@
+/* Usa los tokens --ui-* de themes.css para funcionar en modo claro y oscuro. */
+.nasa-layout { align-items: start; }
+.nasa-apod-controls { display: flex; align-items: end; gap: 12px; margin-bottom: 16px; }
+.nasa-apod-controls label { flex: 1; margin: 0; }
+.nasa-apod-controls input[type='date'] { width: 100%; padding: 10px 12px; border: 1px solid var(--ui-border); border-radius: 3px; color: var(--ui-text); background: var(--ui-raised); font: inherit; color-scheme: inherit; }
+.nasa-date { margin: 0 0 12px; color: var(--ui-accent); font-size: 12px; letter-spacing: .06em; }
+.nasa-figure { margin: 0 0 16px; }
+.nasa-figure img { display: block; width: 100%; max-height: 460px; object-fit: contain; border: 1px solid var(--ui-border); border-radius: 4px; background: #050a12; }
+.nasa-figure figcaption { margin-top: 8px; color: var(--ui-muted); font-size: 11px; }
+.nasa-explanation { margin: 0 0 14px; font-size: 14px; line-height: 1.65; }
+.nasa-intro { margin: 0 0 16px; font-size: 13px; line-height: 1.6; }
+.nasa-error { padding: 14px; border: 1px solid var(--ui-warning); border-radius: 4px; background: var(--ui-raised); }
+.nasa-error p { margin: 0 0 12px; color: var(--ui-warning); }
+.nasa-neo-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin-bottom: 18px; border: 1px solid var(--ui-border); background: var(--ui-border); }
+.nasa-neo-summary > div { padding: 12px; background: var(--ui-raised); }
+.nasa-neo-summary small { display: block; color: var(--ui-muted); font-size: 10px; letter-spacing: .06em; }
+.nasa-neo-summary b { display: block; margin-top: 6px; color: var(--ui-text); font-size: 18px; }
+.nasa-neo-list { display: grid; gap: 12px; margin: 0 0 14px; padding: 0; list-style: none; }
+.nasa-neo { padding: 14px; border: 1px solid var(--ui-border); border-left: 3px solid var(--ui-bar); border-radius: 4px; background: var(--ui-raised); }
+.nasa-neo.hazardous { border-left-color: var(--ui-warning); }
+.nasa-neo-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; }
+.nasa-neo-head b { color: var(--ui-text); }
+.nasa-neo-head a { color: var(--ui-accent); }
+.nasa-neo-head span { color: var(--ui-muted); font-size: 10px; letter-spacing: .08em; }
+.nasa-neo.hazardous .nasa-neo-head span { color: var(--ui-warning); }
+.nasa-neo-bar { height: 6px; margin: 10px 0; overflow: hidden; border-radius: 3px; background: var(--ui-selected); }
+.nasa-neo-bar i { display: block; height: 100%; background: var(--ui-bar); }
+.nasa-neo.hazardous .nasa-neo-bar i { background: var(--ui-warning); }
+.nasa-neo dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin: 0; }
+.nasa-neo dt { color: var(--ui-muted); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; }
+.nasa-neo dd { margin: 2px 0 0; color: var(--ui-text); font-size: 13px; overflow-wrap: anywhere; }
+.nasa-apod a:not(.nasa-figure a) { color: var(--ui-accent); }
+@media (max-width: 800px) { .nasa-apod-controls { flex-wrap: wrap; } }

@@ -5,7 +5,7 @@ import type { Mission } from '../data/missions';
 import { playSound, setAmbienceScene, setAmbienceVolume, setEngineVolume, startAmbience, stopAmbience, stopEngine } from '../systems/audio';
 import './commander.css';
 
-type Props = { mission: Mission; screen: 'home' | 'mission' | 'engineering' | 'transit' | 'exploration' | 'reports' };
+type Props = { mission: Mission; screen: 'home' | 'mission' | 'engineering' | 'transit' | 'exploration' | 'reports' | 'nasa' };
 type Settings = { voice: boolean; subtitles: boolean; effects: boolean; volume: number; voiceURI: string; rate: number };
 const settingsKey = 'orbital-command-commander-settings-v1';
 const guideKey = 'orbital-command-operations-guide-v1';
@@ -126,7 +126,7 @@ export default function Commander({ mission, screen }: Props) {
   useEffect(() => {
     if (previousScreen.current === screen) return;
     previousScreen.current = screen;
-    if (screen === 'home' || screen === 'reports') return;
+    if (screen === 'home' || screen === 'reports' || screen === 'nasa') return;
     const transmission = screen === 'engineering'
       ? { id: 'engineering', title: 'PREPARACIÓN DE SISTEMAS', text: 'Cada instrumento añade masa, consume energía y produce datos. Revisa el lanzador, el presupuesto y el enlace antes de confirmar tu configuración.' }
       : screen === 'transit'
