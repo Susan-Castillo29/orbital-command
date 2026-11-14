@@ -58,7 +58,7 @@ El selector consulta opciones predefinidas; las fechas de NeoWs y DONKI se calcu
 | JPL Horizons | Vector heliocéntrico de Marte; fechas recientes | No |
 | JPL CAD, SBDB, Sentry, Fireball, Scout | Aproximaciones, Ceres, riesgos, bólidos y objetos recientes | No |
 
-EPIC proporciona metadatos, no descarga de imágenes EPIC. El navegador no monta aún capas WMTS de GIBS ni realiza búsquedas libres, consultas históricas arbitrarias o navegación del catálogo. El punto de fotos antiguas de rovers está archivado por NASA y se señala como tal; no se presenta como un servicio operativo. El clima InSight y la API terrestre antigua tampoco se ofrecen.
+EPIC muestra imágenes JPG públicas de su archivo oficial a partir de los metadatos; la biblioteca de NASA presenta miniaturas con enlaces al original. Las imágenes se cargan desde los dominios oficiales, por lo que el navegador debe poder acceder a ellos. El navegador no monta aún capas WMTS de GIBS ni realiza búsquedas libres, consultas históricas arbitrarias o navegación del catálogo. El punto de fotos antiguas de rovers está archivado por NASA y se señala como tal; no se presenta como un servicio operativo. El clima InSight y la API terrestre antigua tampoco se ofrecen.
 
 ## Seguridad y comportamiento
 
@@ -79,3 +79,9 @@ Referencias oficiales: [NASA Open APIs](https://api.nasa.gov/), [aviso de APOD y
 ## Última preparación para Pages
 
 Se guardaron respuestas de 28 conjuntos e imagen APOD mediante consultas reales. La fuente `DONKI/FLR` respondió 404 durante la preparación, por lo que no hay archivo para esa opción. Los datos tienen sus propias fechas de consulta y pueden quedar obsoletos; en el modelo estático no se actualizan en vivo. No se incluye la clave en estos archivos.
+
+## Galería y respuestas completas
+
+APOD, EPIC y la biblioteca de imágenes presentan galerías con títulos, fechas y enlaces a sus originales. Las imágenes se cargan de forma diferida; «Mostrar más imágenes» amplía los resultados de la respuesta actual. El botón «Descargar datos completos» exporta todo el JSON recibido, aunque la vista previa se limite para mantener el rendimiento. Las consultas siguen usando parámetros predefinidos y no recorren automáticamente todas las páginas de un catálogo.
+
+La política CSP permite imágenes solo desde el propio sitio, `images-assets.nasa.gov`, `assets.science.nasa.gov` y `epic.gsfc.nasa.gov`. La clave no se añade a las URL de estas imágenes. Si NASA o la red no las sirven, la tarjeta ofrece un enlace al original. Ver [documentación oficial de EPIC](https://epic.gsfc.nasa.gov/about/api) y [biblioteca de NASA](https://images.nasa.gov/docs/images.nasa.gov_api_docs.pdf).

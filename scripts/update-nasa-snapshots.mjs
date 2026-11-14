@@ -16,7 +16,14 @@ let errors = 0;
 try {
   for (const dataset of selected) {
     const response = await fetch(`${origin}/api/nasa?dataset=${encodeURIComponent(dataset)}`);
-    if (!response.ok) { errors++; console.log(`${dataset}: no disponible (${response.status}); se conserva cualquier archivo anterior`); continue; }
+    if (!response.ok) {
+      errors++;
+      const payload = await response.json().catch(() => ({}));
+      const match = typeof payload.error === 'string' ? payload.error.match(/^El servicio científico respondió (\d{3})\./) : null;
+      const reason = match ? `NASA ${match[1]}` : `error del servicio ${response.status}`;
+      console.log(`${dataset}: no disponible (${reason}); se conserva cualquier archivo anterior`);
+      continue;
+    }
     const bytes = Buffer.from(await response.arrayBuffer());
     if (bytes.includes(key)) throw Error('Se detectó la clave en una respuesta; actualización cancelada.');
     await writeFile(new URL(`${dataset}.json`,directory),bytes);
