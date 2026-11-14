@@ -7,7 +7,7 @@ This is a code-based status record, not a claim of expert validation. “Partial
 - [x] Existing React, TypeScript, Vite and Three.js application retained; mission progress and reports use local browser storage.
 - [x] Responsive navigation, light/dark themes, larger controls, full-screen visualisations and a visible skippable mission setup guide.
 - [x] Commander transmissions, browser speech synthesis, replay, speech and subtitle controls, and English/Spanish selection for the commander. Browser voice availability varies.
-- [~] Localisation: English is the default and the principal navigation and some screens are bilingual; many mission texts, legacy reports, API responses and controls are not fully translated.
+- [~] Localisation: English is the default and the principal navigation and some screens are bilingual; destination briefings and transit controls are bilingual, but many exploration texts, legacy reports, API responses and controls are not fully translated.
 - [~] 3D solar system, spacecraft variants, procedural surface scenes, orbital visualisations, atmospheric/solar models, lighting, exploration controls and synthetic ambience. They are educational approximations, not AAA-quality models or scientifically complete reconstructions.
 - [~] Accessibility: automated checks cover selected views and combinations. Independent assistive-technology testing, human testing and a full WCAG review remain outstanding.
 - [ ] Original cinematic score, professional recorded voice acting, complete launch and landing cinematics, and final campaign return sequence.
@@ -18,7 +18,7 @@ This is a code-based status record, not a claim of expert validation. “Partial
 - [~] Earth observation, lunar and Martian surface activity, rover/walking controls, orbital scanning, samples, simulated lab readings and report transmission exist. Campaign objectives still share simplified mechanics and do not implement every activity in the original request.
 - [~] Planetary lab and probe views provide educational representations; a full continuous, instrumented atmospheric descent and complete internal-layer and solar research gameplay remain outstanding.
 - [x] Restrictions distinguish accessible exploration from remote observation in selected environments; the Sun cannot be entered by a conventional craft in the model.
-- [~] Reports include synthetic readings and sources, and transmitted missions receive a limited debrief. The system does not produce a complete failure report for every failed mission or the full requested end-of-campaign legacy experience.
+- [~] Reports include synthetic readings and sources, and transmitted missions receive a limited debrief. Failed transit attempts are saved and explained separately; exploration failures, complete post-mission analysis and the full end-of-campaign legacy experience remain outstanding.
 
 ## Engineering, travel and learning
 

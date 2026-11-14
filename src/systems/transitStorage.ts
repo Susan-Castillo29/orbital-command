@@ -3,7 +3,7 @@ import type { MissionDesign } from './engineering';
 import { createTransit, type TransitState } from './transit.ts';
 import { readStorage, removeStorage, writeStorage } from './storage.ts';
 
-type SavedTransit = { design: MissionDesign; launchDay: number; state: TransitState };
+type SavedTransit = { design: MissionDesign; launchDay: number; state: TransitState; attemptId?: string };
 const keyFor = (missionId: string) => `orbital-command-transit-v1-${missionId}`;
 
 export function loadTransit(mission: Mission, design: MissionDesign): SavedTransit | null {
@@ -12,6 +12,7 @@ export function loadTransit(mission: Mission, design: MissionDesign): SavedTrans
     if (!value || !value.design || !value.state || !Number.isInteger(value.launchDay) || value.launchDay < 0 || value.launchDay > 99999) return null;
     for (const key of ['ship', 'instrument', 'power', 'radio', 'launcher', 'thermal'] as const) if (value.design[key] !== design[key]) return null;
     if ((value.design.orbit ?? 'balanced') !== (design.orbit ?? 'balanced') || (value.design.difficulty ?? 'standard') !== (design.difficulty ?? 'standard')) return null;
+    if (value.attemptId !== undefined && (typeof value.attemptId !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(value.attemptId))) return null;
     const expected = createTransit(mission, design, value.launchDay);
     const state = value.state;
     if (state.durationDays !== expected.durationDays || state.distanceKm !== expected.distanceKm) return null;
@@ -24,7 +25,7 @@ export function loadTransit(mission: Mission, design: MissionDesign): SavedTrans
     return value;
   } catch { return null; }
 }
-export function saveTransit(missionId: string, design: MissionDesign, launchDay: number, state: TransitState): boolean {
-  return writeStorage(keyFor(missionId), JSON.stringify({ design, launchDay, state }));
+export function saveTransit(missionId: string, design: MissionDesign, launchDay: number, state: TransitState, attemptId?: string): boolean {
+  return writeStorage(keyFor(missionId), JSON.stringify({ design, launchDay, state, ...(attemptId ? { attemptId } : {}) }));
 }
 export function clearTransit(missionId: string) { removeStorage(keyFor(missionId)); }

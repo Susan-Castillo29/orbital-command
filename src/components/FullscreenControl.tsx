@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 /** Fullscreen keeps the actual interactive view and its controls mounted. */
-export default function FullscreenControl({ label }: { label: string }) {
+export default function FullscreenControl({ label, language }: { label: string; language: 'en' | 'es' }) {
+  const t = (es: string, en: string) => language === 'es' ? es : en;
   const button = useRef<HTMLButtonElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [error, setError] = useState('');
@@ -16,8 +17,8 @@ export default function FullscreenControl({ label }: { label: string }) {
     try {
       if (document.fullscreenElement === target) await document.exitFullscreen();
       else if (target.requestFullscreen) await target.requestFullscreen();
-      else setError('Este navegador no admite pantalla completa. Usa el zoom del navegador para ampliar la vista.');
-    } catch { setError('El navegador no permitió ampliar esta vista. Inténtalo de nuevo.'); }
+      else setError(t('Este navegador no admite pantalla completa. Usa el zoom del navegador para ampliar la vista.', 'This browser does not support full screen. Use browser zoom to enlarge the view.'));
+    } catch { setError(t('El navegador no permitió ampliar esta vista. Inténtalo de nuevo.', 'The browser could not enlarge this view. Please try again.')); }
   }
-  return <div className="fullscreen-control"><button ref={button} type="button" onClick={() => void toggle()} aria-label={`${expanded ? 'Salir de pantalla completa' : 'Pantalla completa'}: ${label}`} aria-pressed={expanded}><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={expanded ? 'M9 3v6H3m12-6v6h6M3 15h6v6m12-6h-6v6' : 'M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6'} /></svg> {expanded ? 'Salir · Esc' : 'Pantalla completa'}</button>{error && <span className="fullscreen-error" role="status">{error}</span>}</div>;
+  return <div className="fullscreen-control"><button ref={button} type="button" onClick={() => void toggle()} aria-label={`${expanded ? t('Salir de pantalla completa', 'Exit full screen') : t('Pantalla completa', 'Full screen')}: ${label}`} aria-pressed={expanded}><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={expanded ? 'M9 3v6H3m12-6v6h6M3 15h6v6m12-6h-6v6' : 'M9 3H3v6m12-6h6v6M3 15v6h6m12-6v6h-6'} /></svg> {expanded ? t('Salir · Esc', 'Exit · Esc') : t('Pantalla completa', 'Full screen')}</button>{error && <span className="fullscreen-error" role="status">{error}</span>}</div>;
 }

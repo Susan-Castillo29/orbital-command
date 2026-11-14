@@ -12,6 +12,7 @@ type Props = {
   mission: Mission;
   onSelect: (id: string) => void;
   shipId: ShipId;
+  language: 'en' | 'es';
 };
 
 type Body = { id: string; orbit: number; phase: number; group: THREE.Group; speed: number; parent?: string };
@@ -91,7 +92,7 @@ function makeShip(shipId: ShipId) {
   return ship;
 }
 
-export default function SolarSystemScene({ mission, onSelect, shipId }: Props) {
+export default function SolarSystemScene({ mission, onSelect, shipId, language }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const selectRef = useRef(onSelect);
   const selectedRef = useRef(mission.id);
@@ -324,7 +325,7 @@ export default function SolarSystemScene({ mission, onSelect, shipId }: Props) {
 
   return (
     <div className="space-scene" data-visualization="solar" ref={hostRef} aria-label={`Vista 3D del sistema solar; destino seleccionado: ${mission.destination}`}>
-      <FullscreenControl label="sistema solar" /><div className="scene-topline"><span><i className="live-dot" /> VISUALIZACIÓN EN VIVO</span><span>SECTOR SOL · 01</span></div>
+      <FullscreenControl language={language} label={language === "en" ? "solar system" : "sistema solar"} /><div className="scene-topline"><span><i className="live-dot" /> VISUALIZACIÓN EN VIVO</span><span>SECTOR SOL · 01</span></div>
       <div className="observatory-controls"><button onClick={() => window.dispatchEvent(new CustomEvent('orbital-focus-body', { detail: mission.targetBodyId }))}>Observar {mission.destination}</button><button onClick={() => window.dispatchEvent(new Event('orbital-overview'))}>Sistema completo</button></div>
       <div className="scene-controls-hint"><span>DRAG <b>ROTAR</b></span><span>SCROLL <b>ZOOM</b></span><span>CLICK <b>SELECCIONAR</b></span></div>
       <div className="scene-scale"><span>ÓRBITAS Y TAMAÑOS DIFERENCIADOS</span><div><i /></div><small>DISTANCIA COMPRIMIDA · TAMAÑO EXAGERADO</small></div>

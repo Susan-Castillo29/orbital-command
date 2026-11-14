@@ -6,9 +6,9 @@ import { atmosphereComposition, hasAtmosphereModel, modelFor, type LabReading } 
 import type { InstrumentId } from '../systems/engineering';
 import './planetary-lab.css';
 
-type Props = { bodyId: string; destination: string; instrument: InstrumentId; canRecord: boolean; onRecord: (reading: LabReading) => void; onClose: () => void };
+type Props = { language: 'en' | 'es'; bodyId: string; destination: string; instrument: InstrumentId; canRecord: boolean; onRecord: (reading: LabReading) => void; onClose: () => void };
 type Metric = 'reflectance' | 'temperature' | 'pressure' | 'density' | 'magnetic' | 'wind' | 'structure';
-export default function PlanetaryLab({ bodyId, destination, instrument, canRecord, onRecord, onClose }: Props) {
+export default function PlanetaryLab({ bodyId, destination, instrument, canRecord, onRecord, onClose, language }: Props) {
   const [mode, setMode] = useState<'atmosphere' | 'interior'>(() => hasAtmosphereModel(bodyId) ? 'atmosphere' : 'interior');
   const [index, setIndex] = useState(0);
   const indexRef = useRef(index);
@@ -81,7 +81,7 @@ export default function PlanetaryLab({ bodyId, destination, instrument, canRecor
   const record = () => onRecord({ region: layer.name, label: selectedMetric.label, value: selectedMetric.value, unit: selectedMetric.unit });
   return <div className="lab-backdrop"><section ref={dialog} className="planetary-lab" data-visualization="lab" role="dialog" aria-modal="true" aria-label={`Laboratorio de ${destination}`}>
     <header><div><span>SONDA Y MODELO CIENTÍFICO · SIMULACIÓN</span><h2>{bodyId === 'sun' ? 'Observatorio solar' : `Laboratorio de ${destination}`}</h2></div><button onClick={onClose} aria-label="Cerrar laboratorio">×</button></header>
-    <FullscreenControl label="laboratorio planetario" /><div className="lab-layout"><div className="lab-model" ref={host} aria-label="Modelo tridimensional de capas" /><div className="lab-controls">
+    <FullscreenControl language={language} label={language === "en" ? "planetary laboratory" : "laboratorio planetario"} /><div className="lab-layout"><div className="lab-model" ref={host} aria-label="Modelo tridimensional de capas" /><div className="lab-controls">
       {bodyId !== 'sun' && <div className="lab-tabs">{hasAtmosphereModel(bodyId) && <button aria-pressed={mode === 'atmosphere'} onClick={() => { setMode('atmosphere'); setIndex(0); }}>SONDA ATMOSFÉRICA</button>}<button aria-pressed={mode === 'interior'} onClick={() => { setMode('interior'); setIndex(0); }}>INTERIOR VIRTUAL</button></div>}
       <div className="lab-layers">{layers.map((item, i) => <button key={item.name} aria-pressed={index === i} onClick={() => setIndex(i)}>{String(i + 1).padStart(2, '0')} · {item.name}</button>)}</div>
       <p>{layer.description}</p>{layer.temperature !== undefined && <p>TEMPERATURA SIMULADA: <strong>{layer.temperature.toLocaleString('es-DO')} °C</strong></p>}{layer.pressure !== undefined && <p>PRESIÓN SIMULADA: <strong>{layer.pressure} bar</strong> · DENSIDAD INDICATIVA: <strong>{layer.density}</strong></p>}

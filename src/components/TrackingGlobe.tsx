@@ -12,7 +12,7 @@ const stations = [
   { name: 'Canberra · Australia', country: 'Australia', lat: -35.4, lon: 148.98, detail: 'Complejo real de la Red del Espacio Profundo de NASA; su participación en esta historia es ficticia.' },
 ];
 
-export default function TrackingGlobe() {
+export default function TrackingGlobe({ language }: { language: 'en' | 'es' }) {
   const host = useRef<HTMLDivElement>(null);
   const selectedRef = useRef(0);
   const [selected, setSelected] = useState(0);
@@ -56,5 +56,5 @@ export default function TrackingGlobe() {
     render();
     return () => { cancelAnimationFrame(frame); observer.disconnect(); renderer.domElement.removeEventListener('pointerdown', onClick); texture?.dispose(); earth.geometry.dispose(); (earth.material as THREE.Material).dispose(); markers.forEach((marker) => { marker.geometry.dispose(); (marker.material as THREE.Material).dispose(); }); detachQuality(); renderer.dispose(); renderer.domElement.remove(); };
   }, []);
-  return <div className="tracking-globe" data-visualization="tracking"><FullscreenControl label="globo de seguimiento" /><div className="tracking-canvas" ref={host} role="img" aria-label="Globo con estaciones de seguimiento" /><div className="tracking-stations">{stations.map((station, index) => <button key={station.name} aria-pressed={selected === index} onClick={() => setSelected(index)}>{station.country}</button>)}</div><strong>{stations[selected].name}</strong><p>{stations[selected].detail}</p><a href="https://www.nasa.gov/directorates/somd/space-communications-navigation-program/dsn-complexes/" target="_blank" rel="noreferrer">Información sobre la red real de NASA ↗</a><small>Posiciones aproximadas · enlaces de esta misión simulados.</small></div>;
+  return <div className="tracking-globe" data-visualization="tracking"><FullscreenControl language={language} label={language === "en" ? "tracking globe" : "globo de seguimiento"} /><div className="tracking-canvas" ref={host} role="img" aria-label="Globo con estaciones de seguimiento" /><div className="tracking-stations">{stations.map((station, index) => <button key={station.name} aria-pressed={selected === index} onClick={() => setSelected(index)}>{station.country}</button>)}</div><strong>{stations[selected].name}</strong><p>{stations[selected].detail}</p><a href="https://www.nasa.gov/directorates/somd/space-communications-navigation-program/dsn-complexes/" target="_blank" rel="noreferrer">Información sobre la red real de NASA ↗</a><small>Posiciones aproximadas · enlaces de esta misión simulados.</small></div>;
 }

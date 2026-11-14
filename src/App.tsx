@@ -9,6 +9,7 @@ import type { TransitState } from './systems/transit';
 import { isEonetTarget, type EonetTarget } from './systems/eonet';
 import { chapterNames, chapterOrder, chapterUnlocked } from './systems/campaign';
 import { missions } from './data/missions';
+import { localiseMission } from './data/missionLocale';
 import type { Mission } from './data/missions';
 import { readStorage, writeStorage } from './systems/storage';
 import { initialPlayerProgress, loadPlayerProgress, type PlayerProgress } from './systems/playerProgress';
@@ -44,6 +45,7 @@ function App() {
     const saved = readStorage('orbital-command-ship');
     return ships.some((ship) => ship.id === saved) ? saved as ShipId : 'pioneer';
   });
+  const missionText = localiseMission(mission, language);
   const missionIndex = useMemo(() => missions.findIndex((item) => item.id === mission.id) + 1, [mission.id]);
   const availableMissions = useMemo(() => missions.filter((item) => chapterUnlocked(item.id, player.completedMissions)).sort((a, b) => {
     const index = (id: string) => { const value = chapterOrder.findIndex((chapter) => chapter === id); return value < 0 ? chapterOrder.length : value; };
@@ -119,7 +121,7 @@ function App() {
                   <button className={`mission-card ${mission.id === item.id ? 'selected' : ''} ${visualGuide === 'select' && mission.id === item.id ? 'visual-guide-target' : ''}`} key={item.id} onClick={() => selectMission(item.id)} aria-pressed={mission.id === item.id}>
                     <span className="mission-index">0{index + 1}</span>
                     <span className="destination-icon" style={{ '--destination-color': item.color } as CSSProperties}>{item.targetBodyId === 'sun' ? '☼' : item.targetBodyId === 'asteroid' ? '◈' : '◉'}</span>
-                    <span className="mission-copy"><b>{item.name}</b><small>{language === "en" && item.id === "earth" ? "HOME · THE PLANET THAT GAVE US LIFE" : chapterNames[item.id] ?? item.category}</small></span>
+                    <span className="mission-copy"><b>{item.name}</b><small>{language === "en" && item.id === "earth" ? "HOME · THE PLANET THAT GAVE US LIFE" : (language === 'en' && item.id === 'asteroid' ? localiseMission(item, language).category : chapterNames[item.id] ?? item.category)}</small></span>
                     <span className={`difficulty ${item.difficulty.toLowerCase()}`}>{language === "en" ? ({ BAJA: "LOW", MEDIA: "MEDIUM", ALTA: "HIGH" } as const)[item.difficulty] : item.difficulty}</span>
                     <span className="card-arrow">↗</span>
                   </button>
@@ -130,22 +132,22 @@ function App() {
             </div>
 
             <section className="universe-panel" aria-label={t("Universo 3D interactivo", "Interactive 3D universe")}>
-              <SolarSystemScene mission={mission} onSelect={selectMission} shipId={shipId} />
+              <SolarSystemScene language={language} mission={mission} onSelect={selectMission} shipId={shipId} />
               <div className="scene-title"><span>{t('VISUALIZACIÓN TÁCTICA', 'TACTICAL DISPLAY')}</span><strong>{t('SISTEMA SOLAR', 'SOLAR SYSTEM')}</strong></div>
-              <div className="target-readout"><span className="readout-dot" style={{ backgroundColor: mission.color }} /><div><small>{t('DESTINO SELECCIONADO', 'SELECTED DESTINATION')}</small><b>{language === "en" && mission.id === "earth" ? "EARTH" : mission.destination.toUpperCase()}</b></div><span className="readout-coord">{missionIndex.toString().padStart(2, '0')} / {String(missions.length).padStart(2, '0')}</span></div>
+              <div className="target-readout"><span className="readout-dot" style={{ backgroundColor: mission.color }} /><div><small>{t('DESTINO SELECCIONADO', 'SELECTED DESTINATION')}</small><b>{missionText.destination.toUpperCase()}</b></div><span className="readout-coord">{missionIndex.toString().padStart(2, '0')} / {String(missions.length).padStart(2, '0')}</span></div>
               <div className="scene-footer"><span><i className="live-dot" /> {t("ÓRBITAS SIMULADAS", "SIMULATED ORBITS")}</span><span>{t('MODELO ORBITAL EDUCATIVO · NO A ESCALA', 'EDUCATIONAL ORBITAL MODEL · NOT TO SCALE')}</span></div>
             </section>
 
             <aside className="briefing-column">
               <div className="briefing-head"><span className="eyebrow">{t('RESUMEN DE MISIÓN', 'MISSION OVERVIEW')}</span><span className="briefing-number">OC-{String(missionIndex).padStart(3, '0')}</span></div>
-              <figure className="planet-portrait"><img src={`${import.meta.env.BASE_URL}illustrations/${mission.targetBodyId}.svg`} alt={`Ilustración vectorial de ${mission.destination}`} width="480" height="320" /><figcaption>{t('Atlas de misión · ilustración SVG', 'Mission atlas · SVG illustration')}</figcaption></figure><div className="destination-name"><span className="destination-orb" style={{ '--destination-color': mission.color } as CSSProperties}>{mission.id === 'sun' ? '☼' : '·'}</span><div><small>{t('OBJETIVO PRINCIPAL', 'PRIMARY TARGET')}</small><h2>{language === "en" && mission.id === "earth" ? "Earth" : mission.destination}</h2></div></div>
+              <figure className="planet-portrait"><img src={`${import.meta.env.BASE_URL}illustrations/${mission.targetBodyId}.svg`} alt={`${t('Ilustración vectorial de', 'Vector illustration of')} ${missionText.destination}`} width="480" height="320" /><figcaption>{t('Atlas de misión · ilustración SVG', 'Mission atlas · SVG illustration')}</figcaption></figure><div className="destination-name"><span className="destination-orb" style={{ '--destination-color': mission.color } as CSSProperties}>{mission.id === 'sun' ? '☼' : '·'}</span><div><small>{t('OBJETIVO PRINCIPAL', 'PRIMARY TARGET')}</small><h2>{missionText.destination}</h2></div></div>
               <div className="briefing-divider" />
               <span className="eyebrow">{t('OBJETIVO CIENTÍFICO', 'SCIENCE OBJECTIVE')}</span>
-              <p className="objective-text">{language === "en" && mission.id === "earth" ? "Measure changes in cloud cover and vegetation." : mission.objective}</p>
-              <p className="mission-description">{language === "en" && mission.id === "earth" ? "A low-Earth-orbit satellite studies the climate and surface of our home planet." : mission.description}</p>
+              <p className="objective-text">{missionText.objective}</p>
+              <p className="mission-description">{missionText.description}</p>
               <div className="briefing-stats">
                 <div><span>{t('PRESUPUESTO', 'BUDGET')}</span><b><i>◈</i> {mission.budget} <small>CR</small></b></div>
-                <div><span>{t('DURACIÓN EST.', 'EST. DURATION')}</span><b><i>◷</i> {language === "en" && mission.id === "earth" ? "90 days" : mission.duration}</b></div>
+                <div><span>{t('DURACIÓN EST.', 'EST. DURATION')}</span><b><i>◷</i> {missionText.duration}</b></div>
                 <div><span>{t('DIFICULTAD', 'DIFFICULTY')}</span><b className="difficulty-value">{language === "en" ? ({ BAJA: "LOW", MEDIA: "MEDIUM", ALTA: "HIGH" } as const)[mission.difficulty] : mission.difficulty}</b></div>
                 <div><span>{t('RECOMPENSA', 'REWARD')}</span><b><i>✧</i> {mission.reward} <small>XP</small></b></div>
               </div>
@@ -156,10 +158,10 @@ function App() {
           </section>
         ) : screen === 'mission' ? (
           <section className="briefing-screen">
-            <div className="briefing-screen-heading"><button className="back-button" onClick={() => setScreen('home')}>← VOLVER AL SISTEMA SOLAR</button><span className="section-kicker"><span>02</span> BRIEFING DE CAMPAÑA</span><h1>{mission.name}</h1><p>{mission.id === 'moon' ? 'Llega a la Luna, selecciona un sitio seguro, despliega el rover y entrega un informe geológico al centro de control.' : mission.description}</p></div>
+            <div className="briefing-screen-heading"><button className="back-button" onClick={() => setScreen('home')}>{t("← VOLVER AL SISTEMA SOLAR", "← BACK TO SOLAR SYSTEM")}</button><span className="section-kicker"><span>02</span> {t("BRIEFING DE CAMPAÑA", "CAMPAIGN BRIEFING")}</span><h1>{mission.name}</h1><p>{mission.id === 'moon' ? t('Llega a la Luna, selecciona un sitio seguro, despliega el rover y entrega un informe geológico al centro de control.', 'Reach the Moon, select a safe site, deploy the rover and deliver a geological report to mission control.') : missionText.description}</p></div>
             <div className="briefing-detail-grid">
-              <div className="briefing-detail-scene"><SolarSystemScene mission={mission} onSelect={selectMission} shipId={shipId} /><div className="detail-target-chip"><i className="live-dot" /> OBJETIVO · {mission.destination.toUpperCase()}</div></div>
-              <div className="briefing-detail-card"><span className="eyebrow">ORDEN DE MISIÓN · OC-{String(missionIndex).padStart(3, '0')}</span><h2>{mission.objective}</h2><p>{mission.description}</p><div className="detail-grid-stats"><div><small>FINANCIACIÓN</small><b>{mission.budget} <i>CR</i></b></div><div><small>TIEMPO DE MISIÓN</small><b>{mission.duration}</b></div><div><small>NIVEL DE RIESGO</small><b>{language === "en" ? ({ BAJA: "LOW", MEDIA: "MEDIUM", ALTA: "HIGH" } as const)[mission.difficulty] : mission.difficulty}</b></div><div><small>CIENCIA POTENCIAL</small><b>+{mission.reward} <i>XP</i></b></div></div><div className="phase-progress"><div><span>PROGRESO DE PREPARACIÓN</span><b>02 / 04</b></div><div className="progress-track"><i /></div><small>BRIEFING COMPLETADO · SIGUIENTE: INGENIERÍA</small></div><button className={`primary-button ${visualGuide === "design" ? "visual-guide-target" : ""}`} onClick={() => { setScreen('engineering'); if (visualGuide === "design") setVisualGuide("confirm"); }}>{t("DISEÑAR MISIÓN", "DESIGN MISSION")} <b>↗</b></button></div>
+              <div className="briefing-detail-scene"><SolarSystemScene language={language} mission={mission} onSelect={selectMission} shipId={shipId} /><div className="detail-target-chip"><i className="live-dot" /> {t("OBJETIVO", "TARGET")} · {missionText.destination.toUpperCase()}</div></div>
+              <div className="briefing-detail-card"><span className="eyebrow">{t("ORDEN DE MISIÓN", "MISSION ORDER")} · OC-{String(missionIndex).padStart(3, '0')}</span><h2>{missionText.objective}</h2><p>{missionText.description}</p><div className="detail-grid-stats"><div><small>{t("FINANCIACIÓN", "FUNDING")}</small><b>{mission.budget} <i>CR</i></b></div><div><small>{t("TIEMPO DE MISIÓN", "MISSION TIME")}</small><b>{missionText.duration}</b></div><div><small>{t("NIVEL DE RIESGO", "RISK LEVEL")}</small><b>{language === "en" ? ({ BAJA: "LOW", MEDIA: "MEDIUM", ALTA: "HIGH" } as const)[mission.difficulty] : mission.difficulty}</b></div><div><small>{t("CIENCIA POTENCIAL", "POTENTIAL SCIENCE")}</small><b>+{mission.reward} <i>XP</i></b></div></div><div className="phase-progress"><div><span>{t("PROGRESO DE PREPARACIÓN", "PREPARATION PROGRESS")}</span><b>02 / 04</b></div><div className="progress-track"><i /></div><small>{t("BRIEFING COMPLETADO · SIGUIENTE: INGENIERÍA", "BRIEFING COMPLETE · NEXT: ENGINEERING")}</small></div><button className={`primary-button ${visualGuide === "design" ? "visual-guide-target" : ""}`} onClick={() => { setScreen('engineering'); if (visualGuide === "design") setVisualGuide("confirm"); }}>{t("DISEÑAR MISIÓN", "DESIGN MISSION")} <b>↗</b></button></div>
             </div>
           </section>
         ) : screen === 'engineering' ? (

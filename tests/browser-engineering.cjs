@@ -18,7 +18,7 @@ const url = process.env.ORBITAL_TEST_URL || 'http://127.0.0.1:4174/';
       await context.addInitScript(({ design, state }) => {
         localStorage.setItem('orbital-command-operations-guide-v1', 'done');
         localStorage.setItem('orbital-command-visual-guide-v1', 'done');
-        localStorage.setItem('orbital-command-transit-v1-earth', JSON.stringify({ design, launchDay: 0, state }));
+        if (!localStorage.getItem('orbital-command-transit-v1-earth')) localStorage.setItem('orbital-command-transit-v1-earth', JSON.stringify({ design, launchDay: 0, state }));
       }, { design, state });
       const page = await context.newPage();
       const errors = []; page.on('pageerror', error => errors.push(error.message));
@@ -50,10 +50,25 @@ const url = process.env.ORBITAL_TEST_URL || 'http://127.0.0.1:4174/';
       await page.getByRole('button', { name: /CONFIRM CONFIGURATION/ }).click();
       await page.getByRole('heading', { name: 'Mission failed' }).waitFor();
       await page.getByText(/Energy ran out before the journey/).waitFor();
-      assert.equal(await page.getByRole('button', { name: /ESTABLECER ÓRBITA/ }).count(), 0);
+      await page.waitForFunction(() => JSON.parse(localStorage.getItem('orbital-command-failed-attempts-v1') || '[]').length === 1);
+      assert.equal(await page.getByRole('button', { name: /ENTER ORBIT OF/ }).count(), 0);
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.getByRole('button', { name: 'Explore · Prepare exploration' }).click();
+      await page.getByLabel('Orbital profile').selectOption('relay');
+      await page.getByLabel('Difficulty', { exact: true }).selectOption('challenging');
+      await page.getByRole('button', { name: /CONFIRM CONFIGURATION/ }).click();
+      await page.getByRole('heading', { name: 'Mission failed' }).waitFor();
+      assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('orbital-command-failed-attempts-v1')).length), 1);
+
       await page.getByRole('button', { name: 'RETRY JOURNEY' }).click();
-      await page.getByRole('button', { name: /INICIAR TRAYECTO/ }).waitFor();
+      await page.getByRole('button', { name: /START JOURNEY/ }).waitFor();
       assert.equal(await page.evaluate(() => localStorage.getItem('orbital-command-transit-v1-earth')), null);
+      await page.getByRole('button', { name: 'Science reports' }).click();
+      await page.getByRole('heading', { name: 'Failed mission analysis' }).waitFor();
+      await page.locator('.failed-attempts summary').first().click();
+      await page.getByText('Energy ran out before arrival; the systems cannot operate without it.').waitFor();
+      const [failureDownload] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'DOWNLOAD ANALYSIS' }).click()]);
+      assert.equal(failureDownload.suggestedFilename(), 'orbital-earth-failure.txt');
       assert.deepEqual(errors, []);
       await context.close(); console.log(`Orbit, difficulty, failure and retry · ${width}px`);
     }
