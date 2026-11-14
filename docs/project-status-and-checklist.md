@@ -29,7 +29,8 @@ This is a code-based status record, not a claim of expert validation. “Partial
 - [x] Mission transit displays simulated time and resources, includes pause/time acceleration and stops at a required decision. Launch windows are illustrative and are not computed from real ephemerides.
 - [x] Designs can be saved locally, compared and shared as validated JSON for the same mission. No shared online design library exists.
 - [~] Scoring exists but does not yet incorporate every requested measure of scientific value, efficiency and decision quality.
-- [ ] Separate configurable batteries, onboard computing and attitude-control subsystems; full mission-specific orbital coverage and communications simulation; unrestricted sandbox mode.
+- [~] An isolated mission experiment lab permits invalid designs and repeated what-if transit simulations with explanatory scoring; it does not simulate every exploration event.
+- [ ] Separate configurable batteries, onboard computing and attitude-control subsystems; full mission-specific orbital coverage and communications simulation.
 
 ## NASA data and infrastructure
 

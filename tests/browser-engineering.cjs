@@ -27,6 +27,16 @@ const url = process.env.ORBITAL_TEST_URL || 'http://127.0.0.1:4174/';
       await page.getByLabel('Orbital profile').selectOption('relay');
       await page.getByLabel('Difficulty', { exact: true }).selectOption('challenging');
       await page.getByText(/Relay increases downlink capacity/).waitFor();
+      const campaignBefore = await page.evaluate(() => localStorage.getItem('orbital-command-player'));
+      await page.getByText('Mission experiment lab').click();
+      await page.getByRole('button', { name: 'SIMULATE DESIGN' }).click();
+      await page.getByRole('heading', { name: 'Simulated journey completed' }).waitFor();
+      await page.getByText(/Experiment score/).waitFor();
+      assert.equal(await page.evaluate(() => localStorage.getItem('orbital-command-player')), campaignBefore);
+      await page.getByLabel('Difficulty', { exact: true }).selectOption('guided');
+      assert.equal(await page.getByText(/Experiment score/).count(), 0);
+      await page.getByLabel('Difficulty', { exact: true }).selectOption('challenging');
+
       await page.getByText('Save, share and compare design').click();
       await page.getByRole('button', { name: 'SAVE DESIGN', exact: true }).click();
       await page.getByText('Design saved in this browser.').waitFor();
