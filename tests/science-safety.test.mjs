@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { modelFor, hasAtmosphereModel } from '../src/data/planetaryLab.ts';
 import { getLandingZones, loadLunarProgress } from '../src/systems/lunarCampaign.ts';
-import { createScienceReport, loadReports, saveReport } from '../src/systems/science.ts';
+import { createScienceReport, loadReports, saveReport, readReportTransmissionCount } from '../src/systems/science.ts';
 import { initialDesign } from '../src/systems/engineering.ts';
 
 test('zonas guardadas de otros cuerpos no habilitan aterrizaje', () => {
@@ -22,6 +22,9 @@ test('el historial rechaza enlaces manipulados y conserva informes válidos', ()
   globalThis.window = { localStorage: { getItem: (key) => store.get(key) ?? null, setItem: (key, value) => store.set(key, value) } };
   const report = createScienceReport({ id: 'earth', name: 'HOME', destination: 'Tierra', objective: 'Observar' }, initialDesign, { fuel: 70, energy: 80, integrity: 90, storage: 0, communications: 80, elapsedMinutes: 0 }, ['Nubes'], []);
   assert.equal(saveReport(report), true);
+  assert.equal(readReportTransmissionCount(), 1);
+  assert.equal(saveReport(report), true);
+  assert.equal(readReportTransmissionCount(), 2);
   assert.equal(loadReports().length, 1);
   report.source = 'javascript:alert(1)';
   store.set('orbital-command-reports-v1', JSON.stringify([report]));

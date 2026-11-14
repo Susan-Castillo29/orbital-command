@@ -28,6 +28,7 @@ import type { LabReading } from '../data/planetaryLab';
 import { loadPlanetTexture } from '../systems/planetTextures';
 import { compressedTransmissionSeconds, estimatedSignalSeconds } from '../systems/communications';
 import { isSimulatedDustStorm } from '../systems/weather';
+import { isEonetTarget, type EonetTarget } from '../systems/eonet';
 import { addBufferedData, emptyDataBuffers, totalBuffered, transmitBufferedData, type DataBuffers, type DataKind } from '../systems/dataBuffers';
 
 type Mode = 'flight' | 'orbit' | 'surface';
@@ -37,7 +38,7 @@ type TutorialStep = { id: string; title: string; instruction: string };
 type OrbitalSurvey = { arrived: boolean; scannedRegions: number[]; transmitted: boolean };
 type SurfaceSensor = { x: number; z: number };
 
-type Props = { mission: Mission; onExit: () => void; shipId: ShipId; design: MissionDesign; arrival: TransitState | null };
+type Props = { mission: Mission; onExit: () => void; shipId: ShipId; design: MissionDesign; arrival: TransitState | null; scienceTarget: EonetTarget | null };
 
 const tutorialOrder = ['travel', 'landing-zone', 'land', 'surface', 'scan', 'sample', 'station', 'recharge', 'analyze', 'antenna', 'transmit', 'complete'];
 const emptyOrbitalSurvey: OrbitalSurvey = { arrived: false, scannedRegions: [], transmitted: false };
@@ -304,7 +305,7 @@ function getTutorialStep(progress: LunarProgress, mode: Mode, resources: Explora
   return { id: 'complete', title: 'Misión completada', instruction: 'La ciencia lunar llegó al centro de control. ¡Buen trabajo, comandante!' };
 }
 
-export default function ExplorationScene({ mission, onExit, shipId, design, arrival }: Props) {
+export default function ExplorationScene({ mission, onExit, shipId, design, arrival, scienceTarget }: Props) {
   const supportsSurface = ['moon', 'mars', 'mercury', 'titan'].includes(mission.id);
   const landingZones = getLandingZones(mission.id);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -316,6 +317,7 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
   const [resources, setResources] = useState<ExplorationResources>(() => arrival ? { fuel: arrival.fuel, energy: arrival.energy, integrity: arrival.integrity, storage: arrival.data, communications: 100, elapsedMinutes: arrival.elapsedDays * 1440 } : loadExplorationResources(mission.id));
   const [buffers, setBuffers] = useState<DataBuffers>(() => loadDataBuffers(mission.id, resources.storage, Boolean(arrival)));
   const [dataPriority, setDataPriority] = useState<DataKind>('observations');
+  const [recordedTarget, setRecordedTarget] = useState<EonetTarget | null>(() => { try { const value: unknown = JSON.parse(readStorage(`orbital-command-eonet-scan-${mission.id}`) ?? 'null'); return isEonetTarget(value) ? value : null; } catch { return null; } });
   const [mode, setMode] = useState<Mode>('flight');
   const [landingInProgress, setLandingInProgress] = useState(false);
   const [selectedId, setSelectedId] = useState(mission.targetBodyId);
@@ -566,6 +568,7 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
     let currentProgress: LunarProgress = { ...progress };
     let currentSurvey: OrbitalSurvey = { ...orbitalSurvey };
     let currentResources: ExplorationResources = { ...resources };
+    let currentRecordedTarget = recordedTarget;
     let currentBuffers: DataBuffers = { ...buffers };
     let currentLabReadings = [...labReadings];
     let currentPhotoCount = photoCount;
@@ -590,13 +593,15 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
       window.clearTimeout(toastTimer);
       toastTimer = window.setTimeout(() => setMessage(''), 4300);
     };
+    const matchedTarget = () => mission.id === 'earth' && scienceTarget && currentRecordedTarget && scienceTarget.id === currentRecordedTarget.id && scienceTarget.retrievedAt === currentRecordedTarget.retrievedAt ? currentRecordedTarget : null;
+    const getRegions = () => { const regions = [...(orbitalRegions[mission.id] ?? ['Sector norte', 'Sector ecuatorial', 'Sector sur'])]; if (mission.id === 'earth' && scienceTarget && (!currentSurvey.scannedRegions.includes(0) || matchedTarget())) regions[0] = `EONET: ${scienceTarget.title}`; return regions; };
     const awardCompletion = () => {
       const surfaceResults = supportsSurface && currentProgress.transmitted;
       const regions = surfaceResults
         ? currentProgress.scannedRocks.map((index) => surface.points[index].name)
-        : currentSurvey.scannedRegions.map((index) => (orbitalRegions[mission.id] ?? ['Sector norte', 'Sector ecuatorial', 'Sector sur'])[index]);
+        : currentSurvey.scannedRegions.map((index) => getRegions()[index]);
       const samples = surfaceResults ? currentProgress.collectedSamples.map((index) => surface.points[index].name) : [];
-      const saved = saveReport(createScienceReport(mission, design, currentResources, regions, samples, currentLabReadings, arrival?.choice ?? null, currentPhotoCount, currentEvents));
+      const saved = saveReport(createScienceReport(mission, design, currentResources, regions, samples, currentLabReadings, arrival?.choice ?? null, currentPhotoCount, currentEvents, currentSurvey.scannedRegions.includes(0) ? matchedTarget() : null));
       if (!saved) setMessageForSeconds('Transmisión completa, pero el navegador no permitió guardar el informe local.');
       const { progress: updated, awarded } = awardMission(mission.id, mission.reward, Math.round(mission.budget * 0.18));
       window.dispatchEvent(new CustomEvent('orbital-commander-transmission', { detail: { id: `complete-${mission.id}`, title: 'TRANSMISIÓN RECIBIDA', text: `Buen trabajo. Los datos de ${mission.destination} han llegado al centro de control. Nuestros equipos internacionales podrán revisar el informe y sus limitaciones.` } }));
@@ -867,8 +872,9 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
         setMessageForSeconds(currentResources.energy < scanEnergy ? 'Energía insuficiente para el instrumento orbital.' : 'Almacenamiento insuficiente. Transmite datos antes de otro escaneo.');
         return;
       }
-      const regions = orbitalRegions[mission.id] ?? ['Sector norte', 'Sector ecuatorial', 'Sector sur'];
+      const regions = getRegions();
       const regionIndex = currentSurvey.scannedRegions.length;
+      if (mission.id === 'earth' && regionIndex === 0 && scienceTarget) { currentRecordedTarget = scienceTarget; setRecordedTarget(scienceTarget); writeStorage(`orbital-command-eonet-scan-${mission.id}`, JSON.stringify(scienceTarget)); }
       const scannedRegions = [...currentSurvey.scannedRegions, regionIndex];
       commitSurvey({ scannedRegions }, `${mission.destination}: ${regions[regionIndex]} escaneado · ${scannedRegions.length}/3 sectores.`);
       commitResources({ energy: currentResources.energy - scanEnergy, storage: currentResources.storage + scanStorage });
@@ -916,7 +922,7 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
       interactPoint(nearestIndex);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLElement && event.target.closest('input, select, textarea, [contenteditable="true"], [role="dialog"]')) return;
+      if (event.target instanceof HTMLElement && event.target.closest('input, select, textarea, button, a, summary, [contenteditable="true"], [role="button"], [role="dialog"]')) return;
       const key = event.key.toLowerCase();
       if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(key)) event.preventDefault();
       keys.add(key);
@@ -969,6 +975,7 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
       setLandingInProgress(false);
       currentProgress = { ...initialLunarProgress };
       currentSurvey = { ...emptyOrbitalSurvey };
+      currentRecordedTarget = null; setRecordedTarget(null); removeStorage(`orbital-command-eonet-scan-${mission.id}`);
       currentResources = { ...initialExplorationResources };
       commitBuffers(emptyDataBuffers());
       onFootNow = false; setOnFoot(false); surface.astronaut.visible = false;
@@ -1526,7 +1533,8 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
 
   const progressSummary = objectiveCompletion(progress);
   const orbitalProgressPercent = Math.round(((orbitalSurvey.arrived ? 1 : 0) + orbitalSurvey.scannedRegions.length + (orbitalSurvey.transmitted ? 1 : 0)) / 5 * 100);
-  const campaignRegions = orbitalRegions[mission.id] ?? ['Sector norte', 'Sector ecuatorial', 'Sector sur'];
+  const campaignRegions = [...(orbitalRegions[mission.id] ?? ['Sector norte', 'Sector ecuatorial', 'Sector sur'])];
+  if (mission.id === 'earth' && scienceTarget && (!orbitalSurvey.scannedRegions.includes(0) || recordedTarget?.id === scienceTarget.id && recordedTarget.retrievedAt === scienceTarget.retrievedAt)) campaignRegions[0] = `EONET: ${scienceTarget.title}`;
   const selectedZone = landingZones.find((zone) => zone.id === landingZoneId) ?? landingZones[0];
   const selectLandingZone = (zoneId: string) => {
     setLandingZoneId(zoneId);

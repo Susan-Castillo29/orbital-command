@@ -1,87 +1,87 @@
-# Fuentes reales NASA y JPL
+# NASA and JPL data sources
 
-El menú **NASA** abre un observatorio separado de las misiones simuladas. Los resultados proceden de los servicios indicados y conservan su estructura original; no sustituyen el modelo orbital del juego ni se presentan como mediciones propias. La imagen del día se muestra cuando NASA devuelve una imagen compatible, y enlaza a su publicación original.
+The **NASA** menu opens an observatory separate from simulated missions. Results come from the stated services and retain their original structure; they do not replace the game's orbital model and are not presented as the player's own measurements. The astronomy image of the day is shown when NASA supplies a compatible image and links to its original publication.
 
-## Configuración local
+## Local configuration
 
-Node.js 24 o superior. La clave se ha guardado en `.env.local` con permisos `0600` y el archivo está excluido de Git. No se incluye en el código, compilación, documentación ni respuestas de la API local. Para otra instalación, crear `.env.local` con:
+Node.js 24 or later is required. The existing local key is stored in `.env.local` with `0600` permissions; that file is excluded from Git. The key is not included in source code, the build, documentation or local API responses. For another installation, create `.env.local` containing:
 
 ```dotenv
-NASA_API_KEY=coloca_aqui_tu_clave
+NASA_API_KEY=your_private_key_here
 ```
 
-No compartir el archivo ni incorporar la clave a `VITE_*`, porque Vite expone esas variables al navegador. El PDF original contiene una clave y debe conservarse en una ubicación privada. Si la clave se comparte por accidente, solicitar su sustitución.
+Do not share the file or add the key to a `VITE_*` variable, as Vite exposes those variables to the browser. The original PDF contains a key and should remain in a private location. If the key is accidentally disclosed, request a replacement.
 
 ```sh
 npm ci
 npm run dev
-# O compilación y servidor local de producción:
+# Alternatively, build and run the local production server:
 npm run build
 PORT=4175 npm run serve
 ```
 
-El gestor local inicia Vite en el puerto asignado. En desarrollo y preview, `vite.config.ts` registra el intermediario; `npm run serve` sirve `dist/` y la API en el mismo origen, solo en `127.0.0.1`. El puerto de `serve` puede cambiarse con `PORT`. Variables de entorno ya configuradas tienen prioridad sobre el archivo local.
+The workspace manager starts Vite on its assigned port. During development and preview, `vite.config.ts` registers the intermediary; `npm run serve` serves `dist/` and the API from the same origin on `127.0.0.1` only. Set `PORT` to change the server port. Existing environment variables take precedence over the local file.
 
-GitHub Pages solo publica archivos estáticos: **no ejecuta el intermediario**. Por ello, si la consulta en vivo no está disponible, el observatorio utiliza las respuestas públicas guardadas en `public/nasa-data/`. Muestra la fecha de consulta y aclara que son archivos publicados, no datos en vivo. Si una fuente no tiene archivo, informa del fallo. La actualización de la página no renueva automáticamente estas respuestas.
+GitHub Pages serves static files and **does not run the intermediary**. If a live request is unavailable, the observatory therefore falls back to public responses in `public/nasa-data/`. It shows the retrieval time and identifies them as published snapshots, not live data. If no snapshot exists for a source, it reports the failure. Refreshing the page does not automatically renew these responses.
 
-Para renovar los archivos localmente con la clave privada:
+To refresh the snapshots locally with a private key:
 
 ```sh
 npm run nasa:update
-# Solo fuentes concretas:
+# Selected sources only:
 node scripts/update-nasa-snapshots.mjs apod neows
 ```
 
-El script solicita a NASA desde el servidor, verifica que la clave no aparezca en los archivos, guarda respuestas exitosas y conserva la versión anterior si una fuente falla. La imagen APOD solo se descarga del origen autorizado. Antes de hacer públicos archivos científicos o imágenes, revisar sus derechos de uso y créditos.
+The script requests NASA data server-side, checks that the key does not appear in the files, saves successful responses and retains the previous version when a source fails. The APOD image is downloaded only from the authorised origin. Review usage rights and credits before making scientific files or images public.
 
-Para actualizar durante cada ejecución del despliegue de GitHub Pages, la persona administradora del repositorio debe crear el secreto de Actions `NASA_API_KEY` en **Settings → Secrets and variables → Actions**. El workflow lo pasa al proceso de actualización; si no existe, conserva los archivos fechados. GitHub cifra los secretos, pero las personas con capacidad de modificar el workflow podrían diseñar código que los lea: limitar ese acceso. Nunca guardar la clave ni la clave de descifrado en archivos del repositorio. La configuración del secreto no se ha realizado desde esta entrega.
+To refresh snapshots during GitHub Pages deployments, a repository administrator can create the Actions secret `NASA_API_KEY` under **Settings → Secrets and variables → Actions**. The workflow passes it to the update process; if it is absent, the existing dated files are retained. GitHub encrypts secrets, but anyone able to modify the workflow could write code that reads them, so restrict that access. Never store the key or a decryption key in repository files. Subsequent deployment results should be checked in Actions; the existence or contents of a configured secret cannot be inferred from this document.
 
-Para consultas en vivo se necesita un servidor Node o función equivalente y un proxy inverso en el mismo origen hacia `/api/nasa`, con `NASA_API_KEY` configurada como secreto del proveedor. No se ha desplegado ese servicio ni se ha configurado un proxy público.
+Live queries require a Node server or equivalent function and a same-origin reverse proxy to `/api/nasa`, with `NASA_API_KEY` configured as a provider secret. No public intermediary or reverse proxy is included in the GitHub Pages deployment.
 
-## Catálogo implementado
+## Implemented catalogue
 
-El selector consulta opciones predefinidas; las fechas de NeoWs y DONKI se calculan a partir del día actual. Se muestra el resultado JSON y la hora de consulta; no son formularios genéricos para todos los parámetros del PDF.
+The selector uses predefined options. NeoWs and DONKI dates are calculated from the current day. The interface shows the JSON response and retrieval time; it does not expose every parameter from the source APIs.
 
-| Servicio | Opciones de la interfaz | Clave |
+| Service | Interface options | Key required |
 | --- | --- | --- |
-| APOD | Publicación e imagen actual; API nueva `science.nasa.gov/wp-json/wp/v2/apod-basic/` | Sí |
-| NeoWs | Feed de siete días anteriores, Eros y primera página del catálogo | Sí |
-| DONKI | FLR, CME, GST, IPS, SEP, MPC, RBE, HSS y notificaciones, últimos siete días | Sí |
-| EPIC | Metadatos de imágenes naturales recientes | Sí |
-| TechPort | Listado de proyectos | Sí |
-| TechTransfer | Búsqueda de patentes por motor en la API pública actual | No |
-| NASA Images | Búsqueda de imágenes de la Tierra y rovers marcianos | No |
-| EONET | Eventos abiertos y categorías | No |
-| Exoplanet Archive | 20 registros recientes de la tabla planetaria | No |
-| Earthdata CMR | Diez colecciones relacionadas con nivel del mar | No |
-| Earthdata GIBS | Comprobación de capacidades WMTS y tamaño recibido | No |
-| JPL Horizons | Vector heliocéntrico de Marte; fechas recientes | No |
-| JPL CAD, SBDB, Sentry, Fireball, Scout | Aproximaciones, Ceres, riesgos, bólidos y objetos recientes | No |
+| APOD | Current publication and image; new `science.nasa.gov/wp-json/wp/v2/apod-basic/` API | Yes |
+| NeoWs | Previous seven-day feed, Eros and the first catalogue page | Yes |
+| DONKI | FLR, CME, GST, IPS, SEP, MPC, RBE, HSS and notifications, previous seven days | Yes |
+| EPIC | Recent natural-colour image metadata | Yes |
+| TechPort | Project list | Yes |
+| TechTransfer | Engine patent search using the current public API | No |
+| NASA Images | Earth and Mars rover image searches | No |
+| EONET | Open events and categories | No |
+| Exoplanet Archive | 20 recent planetary-table records | No |
+| Earthdata CMR | Ten collections related to sea level | No |
+| Earthdata GIBS | WMTS capabilities check and received size | No |
+| JPL Horizons | Mars heliocentric vector for recent dates | No |
+| JPL CAD, SBDB, Sentry, Fireball, Scout | Close approaches, Ceres, impact risks, fireballs and recent objects | No |
 
-EPIC muestra imágenes JPG públicas de su archivo oficial a partir de los metadatos; la biblioteca de NASA presenta miniaturas con enlaces al original. Las imágenes se cargan desde los dominios oficiales, por lo que el navegador debe poder acceder a ellos. El navegador no monta aún capas WMTS de GIBS ni realiza búsquedas libres, consultas históricas arbitrarias o navegación del catálogo. El punto de fotos antiguas de rovers está archivado por NASA y se señala como tal; no se presenta como un servicio operativo. El clima InSight y la API terrestre antigua tampoco se ofrecen.
+EPIC displays public JPEGs from its official archive using the returned metadata; the NASA library displays thumbnails linked to the originals. The browser must be able to reach the official image domains. The application does not yet mount GIBS WMTS layers or provide free-text searches, arbitrary historical queries or full catalogue browsing. NASA has archived the former Mars rover photos endpoint; the game identifies it as archived rather than presenting it as an operational service. The former InSight weather and Earth APIs are also omitted.
 
-## Seguridad y comportamiento
+## Security and behaviour
 
-`server/nasa-proxy.mjs` acepta únicamente identificadores conocidos y construye las URL del lado del servidor; no acepta URL proporcionadas por el cliente. Solo admite GET, rechaza solicitudes marcadas como provenientes de otro sitio, aplica un límite local de 30 consultas por minuto por dirección, caché de cinco minutos, tiempo máximo de 12 segundos, límites de tamaño y no sigue redirecciones. Los errores no devuelven la URL con la clave. Las respuestas JSON se revisan para ocultar cualquier aparición literal de la clave. La imagen APOD solo se obtiene desde `assets.science.nasa.gov`, después de consultar APOD, y admite formatos de imagen permitidos y tamaño limitado. No interpreta HTML remoto.
+`server/nasa-proxy.mjs` accepts only known identifiers and constructs URLs server-side; it does not accept arbitrary client-supplied URLs. It permits GET only, rejects requests marked as cross-site, limits each local address to 30 requests per minute, caches results for five minutes, uses a 12-second timeout, limits response size and does not follow redirects. Errors do not return URLs containing the key. JSON responses are checked to redact literal occurrences of the key. The APOD image is fetched only from `assets.science.nasa.gov`, after an APOD request, with allowed image formats and a size limit. Remote HTML is not rendered.
 
-Estos controles son adecuados para la ejecución local; antes de exponer el servicio públicamente se necesita configurar TLS, cabeceras HTTP, límites compartidos y controles del proxy inverso. Una clave enviada por query string a NASA puede aparecer en registros del proveedor o infraestructura de red; la aplicación no registra esa URL. El límite de NASA también se aplica y puede producir respuestas 429. Los servicios externos pueden cambiar, fallar, responder sin datos o quedar archivados.
+These controls suit local operation. Before public exposure, configure TLS, HTTP headers, shared rate limits and reverse-proxy controls. A key sent to NASA in a query string may appear in provider or network infrastructure logs; the application does not log that URL. NASA's own limits also apply and may produce HTTP 429 responses. External services can change, fail, return no records or be archived.
 
-## Verificación
+## Verification record
 
-- `npm test`: 27 pruebas aprobadas, incluidas rutas no permitidas, método, caché, rechazo de solicitudes entre sitios y ocultación de la clave mediante un proveedor simulado.
-- `npm run build`: compilación aprobada.
-- Consulta real local: 26 de 28 conjuntos predefinidos respondieron correctamente durante esta revisión. `DONKI/FLR` respondió 404 y el antiguo enlace de TechTransfer redirigió a otro dominio; se sustituyó por la API pública actual documentada por NASA, probada con éxito, sin enviarle la clave. No se garantiza su disponibilidad futura. Una respuesta correcta puede contener una lista vacía.
-- APOD y la imagen JPEG real devolvieron 200. El navegador comprobó el panel, APOD y EONET; capturas en `artifacts/nasa-1440.png` y `artifacts/nasa-390.png` si la prueba se ejecutó completamente.
-- Los datos de NASA pueden estar sujetos a sus propios derechos de autor o atribución; consultar la publicación original.
+- `npm test`: 27 tests passed at the recorded review, including rejected destinations and methods, caching, cross-site requests and key redaction using a simulated provider.
+- `npm run build`: build passed.
+- During the recorded live local review, 26 of 28 preset datasets responded successfully. `DONKI/FLR` returned 404; the former TechTransfer link redirected to another domain and was replaced with NASA's documented public API, which was tested successfully without sending the key. Availability can change and a successful response may contain an empty list.
+- APOD and the actual JPEG image returned HTTP 200. The panel, APOD and EONET were checked in a browser; captures, when generated, are in `artifacts/nasa-1440.png` and `artifacts/nasa-390.png`.
+- NASA data and images can have their own copyright or attribution requirements; consult the original publication.
 
-Referencias oficiales: [NASA Open APIs](https://api.nasa.gov/), [aviso de APOD y API de rovers](https://api.nasa.gov/assets/html/header.html), [NASA EONET v3](https://eonet.gsfc.nasa.gov/docs/v3), [JPL Horizons](https://ssd-api.jpl.nasa.gov/doc/horizons.html), [NASA Technology Transfer](https://technology.nasa.gov/api/).
+Official references: [NASA Open APIs](https://api.nasa.gov/), [APOD and rover API notice](https://api.nasa.gov/assets/html/header.html), [NASA EONET v3](https://eonet.gsfc.nasa.gov/docs/v3), [JPL Horizons](https://ssd-api.jpl.nasa.gov/doc/horizons.html), [NASA Technology Transfer](https://technology.nasa.gov/api/).
 
-## Última preparación para Pages
+## Pages snapshot preparation
 
-Se guardaron respuestas de 28 conjuntos e imagen APOD mediante consultas reales. La fuente `DONKI/FLR` respondió 404 durante la preparación, por lo que no hay archivo para esa opción. Los datos tienen sus propias fechas de consulta y pueden quedar obsoletos; en el modelo estático no se actualizan en vivo. No se incluye la clave en estos archivos.
+The recorded preparation saved responses for 28 datasets and the APOD image using live requests. `DONKI/FLR` returned 404, so that option has no snapshot from that run. Data files have their own retrieval times and can become stale; static hosting does not update them live. The key is not included in those files.
 
-## Galería y respuestas completas
+## Galleries and complete responses
 
-APOD, EPIC y la biblioteca de imágenes presentan galerías con títulos, fechas y enlaces a sus originales. Las imágenes se cargan de forma diferida; «Mostrar más imágenes» amplía los resultados de la respuesta actual. El botón «Descargar datos completos» exporta todo el JSON recibido, aunque la vista previa se limite para mantener el rendimiento. Las consultas siguen usando parámetros predefinidos y no recorren automáticamente todas las páginas de un catálogo.
+APOD, EPIC and the image library provide galleries with titles, dates and links to originals. Images load lazily; **Show more images** displays additional items from the current response. **Download complete data** exports the full JSON received, even when the on-screen preview is limited for performance. Queries still use preset parameters and do not automatically traverse every catalogue page.
 
-La política CSP permite imágenes solo desde el propio sitio, `images-assets.nasa.gov`, `assets.science.nasa.gov` y `epic.gsfc.nasa.gov`. La clave no se añade a las URL de estas imágenes. Si NASA o la red no las sirven, la tarjeta ofrece un enlace al original. Ver [documentación oficial de EPIC](https://epic.gsfc.nasa.gov/about/api) y [biblioteca de NASA](https://images.nasa.gov/docs/images.nasa.gov_api_docs.pdf).
+The CSP permits images only from the site itself, `images-assets.nasa.gov`, `assets.science.nasa.gov` and `epic.gsfc.nasa.gov`. The key is not appended to these image URLs. If NASA or the network cannot serve an image, its card links to the original. See the [official EPIC documentation](https://epic.gsfc.nasa.gov/about/api) and [NASA image library documentation](https://images.nasa.gov/docs/images.nasa.gov_api_docs.pdf).

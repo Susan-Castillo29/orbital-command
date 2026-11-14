@@ -13,7 +13,9 @@
     "serve": "node server/nasa-proxy.mjs",
     "nasa:update": "node scripts/update-nasa-snapshots.mjs",
     "test": "node --test tests/*.test.mjs",
-    "test:browser": "node tests/browser-e2e.cjs"
+    "test:browser": "node tests/browser-e2e.cjs",
+    "test:accessibility": "node tests/browser-accessibility.cjs",
+    "test:impact": "node tests/browser-impact.cjs"
   },
   "dependencies": {
     "react": "^19.1.0",
@@ -25,6 +27,7 @@
     "@types/react-dom": "^19.1.7",
     "@types/three": "^0.177.0",
     "@vitejs/plugin-react": "^4.7.0",
+    "axe-core": "4.14.0",
     "typescript": "~5.8.3",
     "vite": "^6.3.5"
   }

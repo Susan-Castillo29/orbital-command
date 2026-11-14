@@ -6,6 +6,7 @@ import SceneBoundary from './components/SceneBoundary';
 import './components/observatory.css';
 import { initialDesign, type MissionDesign } from './systems/engineering';
 import type { TransitState } from './systems/transit';
+import { isEonetTarget, type EonetTarget } from './systems/eonet';
 import { chapterNames, chapterOrder, chapterUnlocked } from './systems/campaign';
 import { missions } from './data/missions';
 import type { Mission } from './data/missions';
@@ -28,6 +29,7 @@ function App() {
   const [mission, setMission] = useState<Mission>(initialMission);
   const [screen, setScreen] = useState<'home' | 'mission' | 'engineering' | 'transit' | 'exploration' | 'reports' | 'nasa'>('home');
   const [design, setDesign] = useState<MissionDesign>(initialDesign);
+  const [scienceTarget, setScienceTarget] = useState<EonetTarget | null>(() => { try { const value: unknown = JSON.parse(readStorage('orbital-command-eonet-target-v1') ?? 'null'); return isEonetTarget(value) ? value : null; } catch { return null; } });
   const [arrival, setArrival] = useState<TransitState | null>(null);
   const [notice, setNotice] = useState('');
   const [player, setPlayer] = useState<PlayerProgress>(() => typeof window === 'undefined' ? initialPlayerProgress : loadPlayerProgress());
@@ -72,8 +74,9 @@ function App() {
 
   return (
     <main className="app-shell" data-theme={theme}>
+      <a className="skip-link" href="#mission-content">Saltar al contenido principal</a>
       <header className="topbar">
-        <a className="brand" href="#home" onClick={() => setScreen('home')} aria-label="Orbital Command, inicio">
+        <a className="brand" href="#home" onClick={() => setScreen('home')}>
           <span className="brand-mark"><span /></span>
           <span className="brand-name">ORBITAL <b>COMMAND</b><small>THE LAST HORIZON</small></span>
         </a>
@@ -83,9 +86,9 @@ function App() {
 
       <div className="work-area">
         <aside className="rail" aria-label="Navegación principal">
-          <button className={`rail-button ${screen === 'home' ? 'active' : ''}`} onClick={() => setScreen('home')} aria-label="Centro de misión" title="Centro de misión"><span>⌂</span><small>OPERACIONES</small></button>
+          <button className={`rail-button ${screen === 'home' ? 'active' : ''}`} onClick={() => setScreen('home')} aria-label="Operaciones · Centro de misión" title="Centro de misión"><span>⌂</span><small>OPERACIONES</small></button>
           <button className={`rail-button ${screen === 'mission' ? 'active' : ''}`} onClick={() => setScreen('mission')} aria-label="Expediente de misión" title="Expediente de misión"><span>◎</span><small>EXPEDIENTE</small></button>
-          <button className={`rail-button ${screen === 'exploration' || screen === 'engineering' || screen === 'transit' ? 'active' : ''}`} onClick={() => setScreen('engineering')} aria-label="Preparar exploración" title="Preparar exploración"><span>✦</span><small>EXPLORAR</small></button>
+          <button className={`rail-button ${screen === 'exploration' || screen === 'engineering' || screen === 'transit' ? 'active' : ''}`} onClick={() => setScreen('engineering')} aria-label="Explorar · Preparar exploración" title="Preparar exploración"><span>✦</span><small>EXPLORAR</small></button>
           <button className={`rail-button ${screen === 'reports' ? 'active' : ''}`} onClick={() => setScreen('reports')} aria-label="Informes científicos" title="Informes científicos"><span>▤</span><small>INFORMES</small></button>
           <button className={`rail-button ${screen === 'nasa' ? 'active' : ''}`} onClick={() => setScreen('nasa')} aria-label="Datos reales de NASA" title="Datos reales de NASA"><span>◈</span><small>NASA</small></button>
           <div className="rail-spacer" />
@@ -93,6 +96,7 @@ function App() {
           <div className="rail-avatar">OC</div>
         </aside>
 
+        <div id="mission-content" className="mission-content" tabIndex={-1}>
         <SceneBoundary key={screen}><Suspense fallback={<div className="systems-loading" role="status">CARGANDO SISTEMAS DE MISIÓN…</div>}>
         {screen === 'home' ? (
           <section className="mission-layout">
@@ -151,7 +155,7 @@ function App() {
             </div>
           </section>
         ) : screen === 'engineering' ? (
-          <MissionEngineering key={mission.id} mission={mission} shipId={shipId} onCancel={() => setScreen('mission')} onLaunch={(next) => { setDesign(next); setShipId(next.ship); setArrival(null); setScreen('transit'); }} />
+          <MissionEngineering key={mission.id} mission={mission} shipId={shipId} onCancel={() => setScreen('mission')} currentTarget={scienceTarget} onLaunch={(next, target) => { setScienceTarget(target); writeStorage('orbital-command-eonet-target-v1', JSON.stringify(target)); setDesign(next); setShipId(next.ship); setArrival(null); setScreen('transit'); }} />
         ) : screen === 'transit' ? (
           <MissionTransit key={mission.id} mission={mission} design={design} onCancel={() => setScreen('engineering')} onArrive={(state) => { setArrival(state); setScreen('exploration'); }} />
         ) : screen === 'nasa' ? (
@@ -159,9 +163,10 @@ function App() {
         ) : screen === 'reports' ? (
           <MissionReports onExit={() => setScreen('home')} />
         ) : (
-          <ExplorationScene mission={mission} onExit={() => setScreen('home')} shipId={shipId} design={design} arrival={arrival} />
+          <ExplorationScene mission={mission} onExit={() => setScreen('home')} shipId={shipId} design={design} arrival={arrival} scienceTarget={mission.id === 'earth' ? scienceTarget : null} />
         )}
         </Suspense></SceneBoundary>
+        </div>
       </div>
       <footer className="statusbar"><span><i className="live-dot" /> SIMULACIÓN LOCAL</span><span>ORBITAL COMMAND <i>·</i> BUILD 0.1.0</span><span>EDUCATIONAL MODEL <i>·</i> ALL VALUES APPROXIMATE</span></footer>
       <Commander mission={mission} screen={screen} />

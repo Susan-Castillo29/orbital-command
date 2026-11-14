@@ -1,11 +1,11 @@
-# Créditos y alcance de texturas
+# Texture credits and scope
 
-Las texturas son recursos locales de presentación; no representan condiciones actuales ni se usan como mediciones del juego.
+These local textures are presentation assets. They do not represent current conditions and are not used as measurements in the game.
 
-- `earth.png`: Blue Marble, NASA/Goddard Space Flight Center Scientific Visualization Studio; datos cortesía de Reto Stöckli (NASA/GSFC) y NASA Earth Observatory. [Fuente y créditos](https://svs.gsfc.nasa.gov/2915/).
-- `mars.jpg`, `mercury.jpg` y `europa.jpg`: mosaicos Viking, Mariner 10 o Voyager procesados por Caltech/JPL/USGS. [Catálogo y limitaciones](https://space.jpl.nasa.gov/tmaps/).
-- `jupiter.jpg`: representación a partir de Voyager, NASA/JPL-Caltech. Las nubes varían con el tiempo.
-- `saturn.jpg` y `titan.jpg`: representaciones ficticias de Don Davis y David Seal, respectivamente, publicadas por JPL/Caltech. No son mapas de observaciones actuales.
-- `venus.jpg`: representación visual derivada de una imagen Mariner 10, clonada para completar el mapa por David Seal, JPL/Caltech. No es un mapa científico de la superficie.
+- `earth.png`: Blue Marble, NASA/Goddard Space Flight Center Scientific Visualization Studio; data courtesy of Reto Stöckli (NASA/GSFC) and NASA Earth Observatory. [Source and credits](https://svs.gsfc.nasa.gov/2915/).
+- `mars.jpg`, `mercury.jpg` and `europa.jpg`: Viking, Mariner 10 or Voyager mosaics processed by Caltech/JPL/USGS. [Catalogue and limitations](https://space.jpl.nasa.gov/tmaps/).
+- `jupiter.jpg`: a Voyager-derived representation, NASA/JPL-Caltech. Clouds change over time.
+- `saturn.jpg` and `titan.jpg`: fictional representations by Don Davis and David Seal respectively, published by JPL/Caltech. They are not maps of current observations.
+- `venus.jpg`: a visual representation derived from a Mariner 10 image, cloned by David Seal to complete the map, JPL/Caltech. It is not a scientific map of the surface.
 
-Los mapas JPL pueden contener zonas sin observaciones y ajustes estéticos. El catálogo indica expresamente que no deben usarse para análisis científico.
+JPL maps may contain regions without observations and aesthetic adjustments. The catalogue explicitly states that they must not be used for scientific analysis.

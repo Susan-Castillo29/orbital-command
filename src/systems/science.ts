@@ -3,6 +3,7 @@ import { instruments, launchers, type MissionDesign } from './engineering.ts';
 import type { ExplorationResources } from './lunarCampaign';
 import { readStorage, writeStorage } from './storage.ts';
 import type { LabReading } from '../data/planetaryLab';
+import { isEonetTarget, type EonetTarget } from './eonet.ts';
 
 export type ScienceReport = {
   missionId: string; missionName: string; destination: string; objective: string; instrument: string;
@@ -10,11 +11,14 @@ export type ScienceReport = {
   transmittedUnits: number; fuelRemaining: number; energyRemaining: number; integrity: number;
   elapsedDays: number; score: number; significance: string; source: string;
   modelReadings?: LabReading[];
+  eonetTarget?: EonetTarget;
   problems?: string[];
   photos?: number;
   netFuelUsed?: number; netEnergyUsed?: number; completedObjectives?: string[];
 };
 const KEY = 'orbital-command-reports-v1';
+const TRANSMISSIONS_KEY = 'orbital-command-report-transmissions-v1';
+export function readReportTransmissionCount(): number { const value = Number(readStorage(TRANSMISSIONS_KEY)); return Number.isSafeInteger(value) && value >= 0 && value < 1000000 ? value : 0; }
 let volatileReports: ScienceReport[] | null = null;
 const contexts: Record<string, { significance: string; source: string }> = {
   earth: { significance: 'Observar nubes, océanos y vegetación ayuda a formular preguntas sobre cambios ambientales en nuestro planeta.', source: 'https://science.nasa.gov/earth/' },
@@ -32,7 +36,7 @@ const contexts: Record<string, { significance: string; source: string }> = {
   asteroid: { significance: 'Los asteroides conservan información sobre materiales y procesos del sistema solar temprano.', source: 'https://science.nasa.gov/mission/psyche/' },
 };
 
-export function createScienceReport(mission: Mission, design: MissionDesign, resources: ExplorationResources, regions: string[], samples: string[], modelReadings: LabReading[] = [], maneuver: 'fuel' | 'energy' | null = null, photos = 0, events: string[] = []): ScienceReport {
+export function createScienceReport(mission: Mission, design: MissionDesign, resources: ExplorationResources, regions: string[], samples: string[], modelReadings: LabReading[] = [], maneuver: 'fuel' | 'energy' | null = null, photos = 0, events: string[] = [], eonetTarget: EonetTarget | null = null): ScienceReport {
   const instrument = instruments[design.instrument];
   const seed = [...mission.id].reduce((total, character) => total + character.charCodeAt(0), 0);
   const context = contexts[mission.id] ?? contexts.earth;
@@ -40,6 +44,7 @@ export function createScienceReport(mission: Mission, design: MissionDesign, res
     missionId: mission.id, missionName: mission.name, destination: mission.destination, objective: mission.objective,
     instrument: instrument.name,
     observations: regions.map((region, index) => ({ region, value: 20 + (seed + index * 17) % 65, unit: 'índice simulado / 100' })),
+    ...(mission.id === 'earth' && eonetTarget && isEonetTarget(eonetTarget) ? { eonetTarget } : {}),
     samples, transmittedUnits: Number((regions.length * instrument.data + modelReadings.length * instrument.data / 3).toFixed(1)), fuelRemaining: resources.fuel,
     energyRemaining: resources.energy, integrity: resources.integrity, elapsedDays: resources.elapsedMinutes / 1440,
     score: Math.round(instrument.science * 0.6 + resources.integrity * 0.4), significance: context.significance, source: context.source, modelReadings,
@@ -60,6 +65,7 @@ export function loadReports(): ScienceReport[] {
       && entry.source.startsWith('https://science.nasa.gov/')
       && ['transmittedUnits', 'fuelRemaining', 'energyRemaining', 'integrity', 'elapsedDays', 'score'].every((key) => typeof entry[key] === 'number' && Number.isFinite(entry[key]))
       && Array.isArray(entry.samples) && entry.samples.every((sample: unknown) => typeof sample === 'string')
+      && (entry.eonetTarget === undefined || entry.missionId === 'earth' && isEonetTarget(entry.eonetTarget))
       && (entry.problems === undefined || Array.isArray(entry.problems) && entry.problems.every((problem: unknown) => typeof problem === 'string'))
       && (entry.photos === undefined || Number.isInteger(entry.photos) && entry.photos >= 0 && entry.photos <= 1000)
       && (entry.netFuelUsed === undefined || typeof entry.netFuelUsed === 'number' && Number.isFinite(entry.netFuelUsed) && entry.netFuelUsed >= 0)
@@ -75,5 +81,6 @@ export function saveReport(report: ScienceReport): boolean {
   const next = [...reports, report];
   const saved = writeStorage(KEY, JSON.stringify(next));
   volatileReports = saved ? null : next;
+  if (saved) writeStorage(TRANSMISSIONS_KEY, String(readReportTransmissionCount() + 1));
   return saved;
 }

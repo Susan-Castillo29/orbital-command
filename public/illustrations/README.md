@@ -1,3 +1,3 @@
-# Atlas vectorial
+# Vector atlas
 
-Ilustraciones originales de ORBITAL COMMAND, generadas mediante `python3 scripts/generate-atlas.py`. Son SVG estáticos sin scripts ni recursos externos; no son fotografías ni mapas científicos. Las texturas NASA/JPL del entorno 3D conservan sus créditos en `../textures/README.md`.
+Original ORBITAL COMMAND illustrations generated with `python3 scripts/generate-atlas.py`. These are static SVGs without scripts or external resources; they are not photographs or scientific maps. NASA/JPL textures used in the 3D environment retain their credits in `../textures/README.md`.

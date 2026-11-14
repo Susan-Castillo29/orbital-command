@@ -91,3 +91,10 @@ html[data-theme='dark'],html[data-theme='dark'] body{background:#07111d}
 .app-shell .report-chart:fullscreen>div>div,.app-shell .report-chart:fullscreen i{height:28px}
 @media(max-width:1100px){.space-scene>.fullscreen-control{top:auto;bottom:90px;right:16px}}
 @media(max-width:600px){.app-shell .fullscreen-control button{font-size:12px;padding:8px 10px}.app-shell .planetary-lab:fullscreen .lab-model{height:45vh;min-height:260px}.exploration-view>.fullscreen-control{left:auto;right:12px;bottom:70px;transform:none}.app-shell .report-chart:fullscreen>div:not(.fullscreen-control){font-size:18px}}
+/* Keyboard access and readable secondary status in both themes. */
+.mission-content{display:flex;flex:1;min-width:0;min-height:0}
+.skip-link{position:fixed;left:12px;top:-100px;z-index:200;padding:12px 16px;border-radius:4px;background:#fff;color:#102b3b;font:600 15px system-ui}
+.skip-link:focus{top:12px;outline:3px solid #2ca9c8;outline-offset:3px}
+.app-shell .scroll-hint,.app-shell .catalog-footer,.app-shell .statusbar{color:#a9bbc9}
+.app-shell[data-theme='light'] .scroll-hint,.app-shell[data-theme='light'] .catalog-footer,.app-shell[data-theme='light'] .statusbar{color:#405b6c}
+.app-shell[data-theme='light'] :is(.brand-name>b,.player-wallet>small,.ship-picker>span,.destination-name>div>small,.briefing-stats b small){color:#33566a}

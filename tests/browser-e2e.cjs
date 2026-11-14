@@ -22,9 +22,15 @@ async function newGame(browser, mission, completed = [], seedProgress = null, se
   await page.goto(baseURL, { waitUntil: 'networkidle' });
   return { context, page, errors };
 }
-async function launch(page, destination) {
+async function launch(page, destination, chooseEonet = false) {
   await page.getByRole('button', { name: 'PREPARAR MISIÓN' }).click();
   await page.getByRole('button', { name: /DISEÑAR MISIÓN/ }).click();
+  if (chooseEonet) {
+    const select = page.getByLabel('Evento para el plan de observación');
+    await page.waitForFunction(() => document.querySelectorAll('select').length && [...document.querySelectorAll('select')].some(select => [...select.options].some(option => option.value.startsWith('EONET_'))), null, { timeout: 25000 });
+    const id = await select.locator('option').nth(1).getAttribute('value');
+    await select.selectOption(id);
+  }
   await page.getByRole('button', { name: /CONFIRMAR CONFIGURACIÓN/ }).click();
   await page.getByRole('button', { name: /INICIAR TRAYECTO/ }).click();
   await page.getByRole('button', { name: '×1000' }).click();
@@ -68,12 +74,16 @@ async function arriveFromSavedTransit(page, destination) {
     {
       const { context, page, errors } = await newGame(browser, 'earth');
       assert.equal(await page.getByRole('button', { name: /LUNAR FRONTIER/ }).count(), 0);
-      await launch(page, 'TIERRA');
+      await launch(page, 'TIERRA', true);
       await page.getByRole('button', { name: 'Pantalla completa: exploración espacial', exact: true }).click();
       await page.waitForFunction(() => document.fullscreenElement?.getAttribute('data-visualization') === 'exploration');
       await page.getByRole('button', { name: 'Salir de pantalla completa: exploración espacial', exact: true }).click();
       await page.waitForFunction(() => !document.fullscreenElement);
       await page.getByRole('button', { name: /DESPLEGAR SATÉLITE/ }).click();
+      const surveyBefore = await page.evaluate(() => localStorage.getItem('orbital-command-survey-earth'));
+      await page.getByRole('button', { name: /FOTOGRAFIAR/ }).focus();
+      await page.keyboard.press('e');
+      assert.equal(await page.evaluate(() => localStorage.getItem('orbital-command-survey-earth')), surveyBefore, 'Keyboard shortcuts must not fire on focused controls');
       const [image] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /FOTOGRAFIAR/ }).click()]);
       assert.match(image.suggestedFilename(), /^orbital-earth-1\.png$/);
       await page.getByRole('button', { name: /ABRIR LABORATORIO 3D/ }).click();
@@ -98,11 +108,14 @@ async function arriveFromSavedTransit(page, destination) {
       await page.getByRole('button', { name: 'Informes científicos' }).click();
       await page.getByRole('heading', { name: /Tierra · EARTH GUARDIAN/ }).waitFor();
       assert.match(await page.locator('body').innerText(), /Lecturas del modelo virtual/);
+      assert.match(await page.locator('body').innerText(), /Evento real seleccionado · NASA EONET/);
+      assert.match(await page.locator('body').innerText(), /escaneos e índices del juego son simulados/);
       assert.match(await page.locator('body').innerText(), /Fotografías simuladas exportadas: 1/);
       await page.getByRole('button', { name: '← VOLVER' }).click();
       await page.getByRole('button', { name: /LUNAR FRONTIER/ }).waitFor();
       assert.deepEqual(errors, []); await context.close(); console.log('✓ Tierra, informe y desbloqueo lunar');
     }
+    if (process.env.ORBITAL_EARTH_ONLY === '1') return;
     for (const item of [{ id: 'moon', target: 'LUNA', completed: ['earth'] }, { id: 'mars', target: 'MARTE', completed: ['earth', 'moon', 'mercury', 'venus'] }]) {
       const { context, page, errors } = await newGame(browser, item.id, item.completed);
       await launch(page, item.target);
