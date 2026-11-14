@@ -28,6 +28,7 @@ const datasets = {
   jpl_scout: () => ({url:'https://ssd-api.jpl.nasa.gov/scout.api'}),
 };
 for (const type of ['FLR','CME','GST','IPS','SEP','MPC','RBE','HSS','notifications']) datasets[`donki_${type.toLowerCase()}`] = () => ({url:`${keyed}/DONKI/${type}?startDate=${daysAgo(7)}&endDate=${today()}`, key:true});
+export const nasaDatasetIds = Object.keys(datasets);
 const cache = new Map();
 const requests = new Map();
 const send = (res, status, value) => {res.statusCode=status;res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.end(JSON.stringify(value));};

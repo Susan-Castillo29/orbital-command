@@ -11,6 +11,7 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "serve": "node server/nasa-proxy.mjs",
+    "nasa:update": "node scripts/update-nasa-snapshots.mjs",
     "test": "node --test tests/*.test.mjs",
     "test:browser": "node tests/browser-e2e.cjs"
   },

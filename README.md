@@ -10,7 +10,7 @@ Simulador educativo de operaciones espaciales en React, TypeScript, Vite y Three
 
 Consulta la [revisión del observatorio, voz, API y rendimiento](docs/auditoria-observatorio.md) para los últimos cambios y sus pruebas.
 
-El menú **NASA** consulta observaciones reales mediante un servidor local; configuración, catálogo y requisitos de publicación en [APIs de NASA y JPL](docs/apis-nasa.md).
+El menú **NASA** consulta observaciones reales mediante un servidor local o muestra datos publicados con fecha cuando solo se usa GitHub Pages; configuración, catálogo y requisitos de publicación en [APIs de NASA y JPL](docs/apis-nasa.md).
 
 ## THE LAST HORIZON
 

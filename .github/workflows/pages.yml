@@ -27,6 +27,15 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Refresh public NASA data when the secret is configured
+        env:
+          NASA_API_KEY: ${{ secrets.NASA_API_KEY }}
+        run: |
+          if [ -n "$NASA_API_KEY" ]; then
+            node scripts/update-nasa-snapshots.mjs
+          else
+            echo "NASA_API_KEY is not configured; using the dated public snapshots."
+          fi
       - name: Build site
         run: npm run build
       - name: Test mission systems

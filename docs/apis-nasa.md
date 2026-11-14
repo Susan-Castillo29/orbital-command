@@ -22,7 +22,21 @@ PORT=4175 npm run serve
 
 El gestor local inicia Vite en el puerto asignado. En desarrollo y preview, `vite.config.ts` registra el intermediario; `npm run serve` sirve `dist/` y la API en el mismo origen, solo en `127.0.0.1`. El puerto de `serve` puede cambiarse con `PORT`. Variables de entorno ya configuradas tienen prioridad sobre el archivo local.
 
-GitHub Pages solo publica archivos estáticos: **no ejecuta este intermediario**. En Pages, el observatorio indicará que el servicio no está disponible. Para publicación con datos reales se necesita un servidor Node o función equivalente y un proxy inverso en el mismo origen hacia `/api/nasa`; configurar `NASA_API_KEY` como secreto del proveedor. No se ha desplegado ese servicio ni se ha configurado un proxy público.
+GitHub Pages solo publica archivos estáticos: **no ejecuta el intermediario**. Por ello, si la consulta en vivo no está disponible, el observatorio utiliza las respuestas públicas guardadas en `public/nasa-data/`. Muestra la fecha de consulta y aclara que son archivos publicados, no datos en vivo. Si una fuente no tiene archivo, informa del fallo. La actualización de la página no renueva automáticamente estas respuestas.
+
+Para renovar los archivos localmente con la clave privada:
+
+```sh
+npm run nasa:update
+# Solo fuentes concretas:
+node scripts/update-nasa-snapshots.mjs apod neows
+```
+
+El script solicita a NASA desde el servidor, verifica que la clave no aparezca en los archivos, guarda respuestas exitosas y conserva la versión anterior si una fuente falla. La imagen APOD solo se descarga del origen autorizado. Antes de hacer públicos archivos científicos o imágenes, revisar sus derechos de uso y créditos.
+
+Para actualizar durante cada ejecución del despliegue de GitHub Pages, la persona administradora del repositorio debe crear el secreto de Actions `NASA_API_KEY` en **Settings → Secrets and variables → Actions**. El workflow lo pasa al proceso de actualización; si no existe, conserva los archivos fechados. GitHub cifra los secretos, pero las personas con capacidad de modificar el workflow podrían diseñar código que los lea: limitar ese acceso. Nunca guardar la clave ni la clave de descifrado en archivos del repositorio. La configuración del secreto no se ha realizado desde esta entrega.
+
+Para consultas en vivo se necesita un servidor Node o función equivalente y un proxy inverso en el mismo origen hacia `/api/nasa`, con `NASA_API_KEY` configurada como secreto del proveedor. No se ha desplegado ese servicio ni se ha configurado un proxy público.
 
 ## Catálogo implementado
 
@@ -54,10 +68,14 @@ Estos controles son adecuados para la ejecución local; antes de exponer el serv
 
 ## Verificación
 
-- `npm test`: 25 pruebas aprobadas, incluidas rutas no permitidas, método, caché, rechazo de solicitudes entre sitios y ocultación de la clave mediante un proveedor simulado.
+- `npm test`: 27 pruebas aprobadas, incluidas rutas no permitidas, método, caché, rechazo de solicitudes entre sitios y ocultación de la clave mediante un proveedor simulado.
 - `npm run build`: compilación aprobada.
 - Consulta real local: 26 de 28 conjuntos predefinidos respondieron correctamente durante esta revisión. `DONKI/FLR` respondió 404 y el antiguo enlace de TechTransfer redirigió a otro dominio; se sustituyó por la API pública actual documentada por NASA, probada con éxito, sin enviarle la clave. No se garantiza su disponibilidad futura. Una respuesta correcta puede contener una lista vacía.
 - APOD y la imagen JPEG real devolvieron 200. El navegador comprobó el panel, APOD y EONET; capturas en `artifacts/nasa-1440.png` y `artifacts/nasa-390.png` si la prueba se ejecutó completamente.
 - Los datos de NASA pueden estar sujetos a sus propios derechos de autor o atribución; consultar la publicación original.
 
 Referencias oficiales: [NASA Open APIs](https://api.nasa.gov/), [aviso de APOD y API de rovers](https://api.nasa.gov/assets/html/header.html), [NASA EONET v3](https://eonet.gsfc.nasa.gov/docs/v3), [JPL Horizons](https://ssd-api.jpl.nasa.gov/doc/horizons.html), [NASA Technology Transfer](https://technology.nasa.gov/api/).
+
+## Última preparación para Pages
+
+Se guardaron respuestas de 28 conjuntos e imagen APOD mediante consultas reales. La fuente `DONKI/FLR` respondió 404 durante la preparación, por lo que no hay archivo para esa opción. Los datos tienen sus propias fechas de consulta y pueden quedar obsoletos; en el modelo estático no se actualizan en vivo. No se incluye la clave en estos archivos.
