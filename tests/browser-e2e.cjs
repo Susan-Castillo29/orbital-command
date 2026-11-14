@@ -9,6 +9,7 @@ const baseURL = process.env.ORBITAL_TEST_URL || 'http://127.0.0.1:4174/';
 async function newGame(browser, mission, completed = [], seedProgress = null, seedTransit = null) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.addInitScript(({ missionId, completedMissions, progress, transit }) => {
+    localStorage.setItem('orbital-command-language', 'es');
     localStorage.setItem('orbital-command-operations-guide-v1', 'done');
     localStorage.setItem('orbital-command-mission', missionId);
     localStorage.setItem('orbital-command-player', JSON.stringify({ credits: 600, xp: 0, completedMissions }));
@@ -51,6 +52,7 @@ async function arriveFromSavedTransit(page, destination) {
     {
       const context = await browser.newContext({ viewport: { width: 1200, height: 800 } });
       await context.addInitScript(() => {
+        localStorage.setItem('orbital-command-language', 'es');
         window.testSpoken = [];
         class Utterance { constructor(text) { this.text = text; } }
         Object.defineProperty(window, 'SpeechSynthesisUtterance', { value: Utterance });

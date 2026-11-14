@@ -5,7 +5,7 @@ const {chromium}=require(process.env.ORBITAL_PLAYWRIGHT_MODULE||path.join(browse
 const url=process.env.ORBITAL_TEST_URL||'http://127.0.0.1:4174/';
 (async()=>{const browser=await chromium.launch({headless:true,args:['--enable-unsafe-swiftshader']});try{for(const width of [1440,390]){
  const context=await browser.newContext({viewport:{width,height:900}});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.addInitScript(()=>localStorage.setItem('orbital-command-operations-guide-v1','done'));
+ await page.addInitScript(()=>{localStorage.setItem('orbital-command-language','es');localStorage.setItem('orbital-command-operations-guide-v1','done');});
  await page.goto(url,{waitUntil:'networkidle'});await page.getByRole('button',{name:'Informes científicos'}).click();
  await page.getByRole('heading',{name:'Evaluación educativa voluntaria'}).waitFor();
  const save=page.getByRole('button',{name:'GUARDAR EVALUACIÓN INICIAL'});assert.equal(await save.isDisabled(),true);
