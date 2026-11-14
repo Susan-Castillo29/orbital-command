@@ -6,9 +6,9 @@ import type { ShipId } from '../data/ships';
 import { defaultDesign, evaluateDesign, instruments, launchers, powerSystems, radios, thermalSystems, type MissionDesign } from '../systems/engineering';
 import './mission-systems.css';
 
-type Props = { mission: Mission; shipId: ShipId; onCancel: () => void; onLaunch: (design: MissionDesign, target: EonetTarget | null) => void; currentTarget: EonetTarget | null; language: "en" | "es" };
+type Props = { mission: Mission; shipId: ShipId; onCancel: () => void; onLaunch: (design: MissionDesign, target: EonetTarget | null) => void; currentTarget: EonetTarget | null; guided: boolean; language: "en" | "es" };
 
-export default function MissionEngineering({ mission, shipId, onCancel, onLaunch, currentTarget, language }: Props) {
+export default function MissionEngineering({ mission, shipId, onCancel, onLaunch, currentTarget, language, guided }: Props) {
   const t = (es: string, en: string) => language === "es" ? es : en;
   const [design, setDesign] = useState<MissionDesign>(() => defaultDesign(mission.id, shipId));
   const assessment = evaluateDesign(design, mission);
@@ -50,7 +50,7 @@ export default function MissionEngineering({ mission, shipId, onCancel, onLaunch
     </div><div className="systems-card"><h2>{t("Validación de lanzamiento", "Launch validation")}</h2><div className="systems-grid"><div><small>{t("MASA / CAPACIDAD", "MASS / CAPACITY")}</small><b>{assessment.mass} / {launchers[design.launcher].capacity} kg</b></div><div><small>{t("COSTE / PRESUPUESTO", "COST / BUDGET")}</small><b>{assessment.cost} / {mission.budget} CR</b></div><div><small>{t("MARGEN DE POTENCIA", "POWER MARGIN")}</small><b>{assessment.powerMargin} kW</b></div><div><small>{t("VALOR CIENTÍFICO", "SCIENCE VALUE")}</small><b>{assessment.science} / 100</b></div><div><small>{t("ALMACENAMIENTO", "STORAGE")}</small><b>{assessment.storage} {t("unidades", "units")}</b></div><div><small>{t("DATOS / ENLACE", "DATA / DOWNLINK")}</small><b>{assessment.dataRate} / {assessment.downlinkRate} {t("por día", "per day")}</b></div></div>
       {assessment.errors.length > 0 ? <div className="systems-alert" role="alert"><strong>{t("Configuración incompatible", "Incompatible configuration")}</strong>{assessment.errors.map((error) => <p key={error}>{localWarning(error)}</p>)}</div> : <p className="systems-ok">{t("✓ Sistemas compatibles para el modelo de misión.", "✓ Systems are compatible with the mission model.")}</p>}
       {assessment.warnings.map((warning) => <p className="systems-warning" key={warning}>⚠ {localWarning(warning)}</p>)}
-      <button className="systems-primary" disabled={assessment.errors.length > 0} onClick={() => onLaunch(design, target)}>{t("CONFIRMAR CONFIGURACIÓN →", "CONFIRM CONFIGURATION →")}</button>
+      <button className={`systems-primary ${guided ? "visual-guide-target" : ""}`} disabled={assessment.errors.length > 0} onClick={() => onLaunch(design, target)}>{t("CONFIRMAR CONFIGURACIÓN →", "CONFIRM CONFIGURATION →")}</button>
     </div></div>
   </section>;
 }

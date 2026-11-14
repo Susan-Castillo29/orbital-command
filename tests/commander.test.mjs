@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { missionTransmission, operationsGuide, selectSpanishVoice } from '../src/data/commander.ts';
+import { missionTransmission, operationsGuide, selectSpanishVoice, selectEnglishVoice, englishGuide, translateTransmission } from '../src/data/commander.ts';
 
 test('elige una voz latinoamericana cuando está disponible y nunca inventa una voz', () => {
   const english = { name: 'English', lang: 'en-US' };
@@ -24,4 +24,16 @@ test('las transmisiones reflejan la misión y la fase seleccionadas', () => {
   assert.match(briefing.text, /Marte/);
   assert.match(exploration.text, /Marte/);
   assert.notEqual(briefing.id, exploration.id);
+});
+
+
+test('English guidance selects a compatible voice and keeps mission messages in English', () => {
+  const british = { name: 'English UK', lang: 'en-GB' };
+  const spanish = { name: 'Español', lang: 'es-MX' };
+  assert.equal(selectEnglishVoice([spanish, british]), british);
+  assert.equal(selectEnglishVoice([spanish]), undefined);
+  assert.equal(englishGuide.length, operationsGuide.length);
+  assert.match(translateTransmission({ id: 'liftoff', title: 'Despegue', text: 'Despegue' }, 'Earth').text, /Liftoff/);
+  const status = translateTransmission({ id: 'status-0.25', title: 'Informe', text: 'Día de misión 2. Hemos recorrido aproximadamente 100 kilómetros simulados. Quedan unos 20 días. Energía 90 por ciento y combustible 80 por ciento.' }, 'Mars');
+  assert.match(status.text, /Mission day 2/);
 });

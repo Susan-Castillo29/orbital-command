@@ -98,3 +98,6 @@ html[data-theme='dark'],html[data-theme='dark'] body{background:#07111d}
 .app-shell .scroll-hint,.app-shell .catalog-footer,.app-shell .statusbar{color:#a9bbc9}
 .app-shell[data-theme='light'] .scroll-hint,.app-shell[data-theme='light'] .catalog-footer,.app-shell[data-theme='light'] .statusbar{color:#405b6c}
 .app-shell[data-theme='light'] :is(.brand-name>b,.player-wallet>small,.ship-picker>span,.destination-name>div>small,.briefing-stats b small){color:#33566a}
+.app-shell .render-settings{display:flex;align-items:center;gap:6px;font-size:12px}
+.app-shell .render-settings select{min-height:38px;max-width:125px;padding:4px 6px;font-size:13px;border:1px solid;border-radius:4px}
+@media(max-width:720px){.app-shell .render-settings{font-size:11px}.app-shell .render-settings select{max-width:92px;font-size:12px}}

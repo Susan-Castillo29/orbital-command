@@ -28,6 +28,9 @@ const initialMission = missions.find((mission) => mission.id === savedMission &&
 function App() {
   const [language, setLanguage] = useState<'en' | 'es'>(() => readStorage('orbital-command-language') === 'es' ? 'es' : 'en');
   const t = (spanish: string, english: string) => language === 'es' ? spanish : english;
+  const [visualGuide, setVisualGuide] = useState<'select' | 'prepare' | 'design' | 'confirm' | null>(() => readStorage('orbital-command-operations-guide-v1') === 'done' && readStorage('orbital-command-visual-guide-v1') !== 'done' ? 'select' : null);
+  const finishVisualGuide = () => { writeStorage('orbital-command-visual-guide-v1', 'done'); setVisualGuide(null); };
+  useEffect(() => { const start = () => { if (readStorage('orbital-command-visual-guide-v1') !== 'done') setVisualGuide('select'); }; window.addEventListener('orbital-start-visual-guide', start); return () => window.removeEventListener('orbital-start-visual-guide', start); }, []);
   const [mission, setMission] = useState<Mission>(initialMission);
   const [screen, setScreen] = useState<'home' | 'mission' | 'engineering' | 'transit' | 'exploration' | 'reports' | 'nasa'>('home');
   const [design, setDesign] = useState<MissionDesign>(initialDesign);
@@ -64,12 +67,13 @@ function App() {
 
   const selectMission = (id: string) => {
     const next = missions.find((item) => item.id === id);
-    if (next && chapterUnlocked(next.id, player.completedMissions)) { setMission(next); playSound('select'); }
+    if (next && chapterUnlocked(next.id, player.completedMissions)) { setMission(next); if (visualGuide === 'select') setVisualGuide('prepare'); playSound('select'); }
     else if (next) { setNotice('Este capítulo se desbloqueará cuando completes la misión anterior.'); window.setTimeout(() => setNotice(''), 3500); }
   };
 
   const beginBriefing = () => {
     setScreen('mission');
+    if (visualGuide === 'select' || visualGuide === 'prepare') setVisualGuide('design');
     playSound('launch');
     setNotice(`${mission.name} · expediente de misión preparado`);
     window.setTimeout(() => setNotice(''), 3500);
@@ -84,7 +88,7 @@ function App() {
           <span className="brand-name">ORBITAL <b>COMMAND</b><small>THE LAST HORIZON</small></span>
         </a>
         <div className="topbar-center"><span className="signal-icon">⌁</span>{t(' RED INTERNACIONAL ', ' INTERNATIONAL NETWORK ')}<i className="live-dot" /> <b>{t('SIMULADA', 'SIMULATED')}</b></div>
-        <div className="topbar-right"><label className="language-picker"><span className="visually-hidden">{t("Idioma", "Language")}</span><select aria-label={t("Idioma", "Language")} value={language} onChange={(event) => setLanguage(event.target.value as "en" | "es")}><option value="en">English</option><option value="es">Español</option></select></label><span className="top-status"><i className="live-dot" /> SYSTEMS NOMINAL</span><span className="player-wallet" title={`Nivel ${Math.floor(player.xp / 500) + 1}`}><b>◈ {player.credits.toLocaleString('es-DO')}</b><small>{player.xp.toLocaleString('es-DO')} XP · NIV {Math.floor(player.xp / 500) + 1}</small></span><label className="ship-picker"><span>NAVE</span><select aria-label="Elegir nave" value={shipId} onChange={(event) => { const next = event.target.value as ShipId; setShipId(next); writeStorage('orbital-command-ship', next); playSound('select'); }} title={ships.find((ship) => ship.id === shipId)?.description}>{ships.map((ship) => <option value={ship.id} key={ship.id}>{ship.name}</option>)}</select></label><button className="icon-button theme-toggle" aria-label={theme === 'dark' ? 'Activar modo claro' : 'Activar modo oscuro'} title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'} onClick={() => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); writeStorage('orbital-command-theme', next); }}> {theme === 'dark' ? '☼' : '☾'} </button><RenderSettings /><span className="top-divider" /><span className="utc-clock">UTC&nbsp; {utc}</span></div>
+        <div className="topbar-right"><label className="language-picker"><span className="visually-hidden">{t("Idioma", "Language")}</span><select aria-label={t("Idioma", "Language")} value={language} onChange={(event) => setLanguage(event.target.value as "en" | "es")}><option value="en">English</option><option value="es">Español</option></select></label><span className="top-status"><i className="live-dot" /> SYSTEMS NOMINAL</span><span className="player-wallet" title={`Nivel ${Math.floor(player.xp / 500) + 1}`}><b>◈ {player.credits.toLocaleString('es-DO')}</b><small>{player.xp.toLocaleString('es-DO')} XP · NIV {Math.floor(player.xp / 500) + 1}</small></span><label className="ship-picker"><span>{t("NAVE", "SHIP")}</span><select aria-label={t("Elegir nave", "Choose spacecraft")} value={shipId} onChange={(event) => { const next = event.target.value as ShipId; setShipId(next); writeStorage('orbital-command-ship', next); playSound('select'); }} title={ships.find((ship) => ship.id === shipId)?.description}>{ships.map((ship) => <option value={ship.id} key={ship.id}>{ship.name}</option>)}</select></label><button className="icon-button theme-toggle" aria-label={theme === 'dark' ? 'Activar modo claro' : 'Activar modo oscuro'} title={theme === 'dark' ? 'Modo claro' : 'Modo oscuro'} onClick={() => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); writeStorage('orbital-command-theme', next); }}> {theme === 'dark' ? '☼' : '☾'} </button><RenderSettings language={language} /><span className="top-divider" /><span className="utc-clock">UTC&nbsp; {utc}</span></div>
       </header>
 
       <div className="work-area">
@@ -111,7 +115,7 @@ function App() {
               <div className="section-heading"><div><span className="eyebrow">{t('CAMPAÑA CIENTÍFICA', 'SCIENCE CAMPAIGN')}</span><h2>{t('Destinos disponibles ', 'Available destinations ')}<span>{String(availableMissions.length).padStart(2, '0')}</span></h2></div><span className="scroll-hint">{t('SE DESBLOQUEAN AL COMPLETAR CAPÍTULOS', 'UNLOCKED BY COMPLETING CHAPTERS')}</span></div>
               <div className="mission-list" aria-label={t("Misiones disponibles", "Available missions")}>
                 {availableMissions.map((item, index) => (
-                  <button className={`mission-card ${mission.id === item.id ? 'selected' : ''}`} key={item.id} onClick={() => selectMission(item.id)} aria-pressed={mission.id === item.id}>
+                  <button className={`mission-card ${mission.id === item.id ? 'selected' : ''} ${visualGuide === 'select' && mission.id === item.id ? 'visual-guide-target' : ''}`} key={item.id} onClick={() => selectMission(item.id)} aria-pressed={mission.id === item.id}>
                     <span className="mission-index">0{index + 1}</span>
                     <span className="destination-icon" style={{ '--destination-color': item.color } as CSSProperties}>{item.targetBodyId === 'sun' ? '☼' : item.targetBodyId === 'asteroid' ? '◈' : '◉'}</span>
                     <span className="mission-copy"><b>{item.name}</b><small>{language === "en" && item.id === "earth" ? "HOME · THE PLANET THAT GAVE US LIFE" : chapterNames[item.id] ?? item.category}</small></span>
@@ -121,7 +125,7 @@ function App() {
                 ))}
               </div>
               <div className="catalog-footer"><span><i className="tiny-dot" /> {t("DATOS CIENTÍFICOS SIMPLIFICADOS", "SIMPLIFIED SCIENTIFIC DATA")}</span><span>{t('ÚLTIMA ACTUALIZACIÓN · 2026', 'LAST UPDATED · 2026')}</span></div>
-              <button className="primary-button mobile-prepare" onClick={beginBriefing}><span>{t('PREPARAR MISIÓN', 'PREPARE MISSION')}</span><b>→</b></button>
+              <button className={`primary-button mobile-prepare ${visualGuide === "prepare" ? "visual-guide-target" : ""}`} onClick={beginBriefing}><span>{t('PREPARAR MISIÓN', 'PREPARE MISSION')}</span><b>→</b></button>
             </div>
 
             <section className="universe-panel" aria-label={t("Universo 3D interactivo", "Interactive 3D universe")}>
@@ -145,7 +149,7 @@ function App() {
                 <div><span>{t('RECOMPENSA', 'REWARD')}</span><b><i>✧</i> {mission.reward} <small>XP</small></b></div>
               </div>
               <div className="briefing-note"><span>i</span><p>{t('La órbita, el consumo de energía y el retraso de comunicación dependen del destino. Los valores son aproximaciones educativas.', 'Orbit, energy consumption and communication delay depend on the destination. Values are educational approximations.')}</p></div>
-              <button className="primary-button" onClick={beginBriefing}><span>{t('PREPARAR MISIÓN', 'PREPARE MISSION')}</span><b>→</b></button>
+              <button className={`primary-button ${visualGuide === "prepare" ? "visual-guide-target" : ""}`} onClick={beginBriefing}><span>{t('PREPARAR MISIÓN', 'PREPARE MISSION')}</span><b>→</b></button>
               <div className="save-indicator"><span className="save-check">✓</span>{t(' GUARDADO LOCAL SI EL NAVEGADOR LO PERMITE', ' SAVED LOCALLY IF YOUR BROWSER ALLOWS IT')}</div>
             </aside>
           </section>
@@ -154,11 +158,11 @@ function App() {
             <div className="briefing-screen-heading"><button className="back-button" onClick={() => setScreen('home')}>← VOLVER AL SISTEMA SOLAR</button><span className="section-kicker"><span>02</span> BRIEFING DE CAMPAÑA</span><h1>{mission.name}</h1><p>{mission.id === 'moon' ? 'Llega a la Luna, selecciona un sitio seguro, despliega el rover y entrega un informe geológico al centro de control.' : mission.description}</p></div>
             <div className="briefing-detail-grid">
               <div className="briefing-detail-scene"><SolarSystemScene mission={mission} onSelect={selectMission} shipId={shipId} /><div className="detail-target-chip"><i className="live-dot" /> OBJETIVO · {mission.destination.toUpperCase()}</div></div>
-              <div className="briefing-detail-card"><span className="eyebrow">ORDEN DE MISIÓN · OC-{String(missionIndex).padStart(3, '0')}</span><h2>{mission.objective}</h2><p>{mission.description}</p><div className="detail-grid-stats"><div><small>FINANCIACIÓN</small><b>{mission.budget} <i>CR</i></b></div><div><small>TIEMPO DE MISIÓN</small><b>{mission.duration}</b></div><div><small>NIVEL DE RIESGO</small><b>{language === "en" ? ({ BAJA: "LOW", MEDIA: "MEDIUM", ALTA: "HIGH" } as const)[mission.difficulty] : mission.difficulty}</b></div><div><small>CIENCIA POTENCIAL</small><b>+{mission.reward} <i>XP</i></b></div></div><div className="phase-progress"><div><span>PROGRESO DE PREPARACIÓN</span><b>02 / 04</b></div><div className="progress-track"><i /></div><small>BRIEFING COMPLETADO · SIGUIENTE: INGENIERÍA</small></div><button className="primary-button" onClick={() => setScreen('engineering')}>DISEÑAR MISIÓN <b>↗</b></button></div>
+              <div className="briefing-detail-card"><span className="eyebrow">ORDEN DE MISIÓN · OC-{String(missionIndex).padStart(3, '0')}</span><h2>{mission.objective}</h2><p>{mission.description}</p><div className="detail-grid-stats"><div><small>FINANCIACIÓN</small><b>{mission.budget} <i>CR</i></b></div><div><small>TIEMPO DE MISIÓN</small><b>{mission.duration}</b></div><div><small>NIVEL DE RIESGO</small><b>{language === "en" ? ({ BAJA: "LOW", MEDIA: "MEDIUM", ALTA: "HIGH" } as const)[mission.difficulty] : mission.difficulty}</b></div><div><small>CIENCIA POTENCIAL</small><b>+{mission.reward} <i>XP</i></b></div></div><div className="phase-progress"><div><span>PROGRESO DE PREPARACIÓN</span><b>02 / 04</b></div><div className="progress-track"><i /></div><small>BRIEFING COMPLETADO · SIGUIENTE: INGENIERÍA</small></div><button className={`primary-button ${visualGuide === "design" ? "visual-guide-target" : ""}`} onClick={() => { setScreen('engineering'); if (visualGuide === "design") setVisualGuide("confirm"); }}>{t("DISEÑAR MISIÓN", "DESIGN MISSION")} <b>↗</b></button></div>
             </div>
           </section>
         ) : screen === 'engineering' ? (
-          <MissionEngineering language={language} key={mission.id} mission={mission} shipId={shipId} onCancel={() => setScreen('mission')} currentTarget={scienceTarget} onLaunch={(next, target) => { setScienceTarget(target); writeStorage('orbital-command-eonet-target-v1', JSON.stringify(target)); setDesign(next); setShipId(next.ship); setArrival(null); setScreen('transit'); }} />
+          <MissionEngineering guided={visualGuide === "confirm"} language={language} key={mission.id} mission={mission} shipId={shipId} onCancel={() => setScreen('mission')} currentTarget={scienceTarget} onLaunch={(next, target) => { if (visualGuide === "confirm") finishVisualGuide(); setScienceTarget(target); writeStorage('orbital-command-eonet-target-v1', JSON.stringify(target)); setDesign(next); setShipId(next.ship); setArrival(null); setScreen('transit'); }} />
         ) : screen === 'transit' ? (
           <MissionTransit key={mission.id} mission={mission} design={design} onCancel={() => setScreen('engineering')} onArrive={(state) => { setArrival(state); setScreen('exploration'); }} />
         ) : screen === 'nasa' ? (
@@ -172,7 +176,8 @@ function App() {
         </div>
       </div>
       <footer className="statusbar"><span><i className="live-dot" />{t(' SIMULACIÓN LOCAL', ' LOCAL SIMULATION')}</span><span>ORBITAL COMMAND <i>·</i> BUILD 0.1.0</span><span>EDUCATIONAL MODEL <i>·</i> ALL VALUES APPROXIMATE</span></footer>
-      <Commander mission={mission} screen={screen} />
+      {visualGuide && ((screen === 'home' && (visualGuide === 'select' || visualGuide === 'prepare')) || (screen === 'mission' && visualGuide === 'design') || (screen === 'engineering' && visualGuide === 'confirm')) && <aside className="visual-guide" aria-live="polite"><div><strong>{t('GUÍA VISUAL', 'VISUAL GUIDE')} · {({select: 1, prepare: 2, design: 3, confirm: 4})[visualGuide]}/4</strong><p>{visualGuide === 'select' ? t('Selecciona la misión iluminada para comenzar.', 'Select the highlighted mission to begin.') : visualGuide === 'prepare' ? t('Pulsa Preparar misión para abrir el expediente.', 'Select Prepare mission to open the briefing.') : visualGuide === 'design' ? t('Pulsa Diseñar misión para elegir la nave y los instrumentos.', 'Select Design mission to choose your spacecraft and instruments.') : t('Revisa el diseño y pulsa Confirmar configuración para continuar.', 'Review your design and select Confirm configuration to continue.')}</p></div><button type="button" onClick={finishVisualGuide}>{t('Omitir', 'Skip')}</button></aside>}
+      <Commander mission={mission} screen={screen} language={language} />
       {notice && <div className="toast" role="status"><span>✓</span>{notice}</div>}
     </main>
   );
