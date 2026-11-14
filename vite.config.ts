@@ -1,9 +1,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { nasaHandler } from './server/nasa-proxy.mjs';
+import { loadEnv } from 'vite';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), 'NASA_');
+  if (env.NASA_API_KEY && !process.env.NASA_API_KEY) process.env.NASA_API_KEY = env.NASA_API_KEY;
+  return ({
   base: './',
-  plugins: [react(), {
+  plugins: [react(), { name: 'nasa-local-api', configureServer(server) { server.middlewares.use((req, res, next) => { void nasaHandler(req, res, next); }); }, configurePreviewServer(server) { server.middlewares.use((req, res, next) => { void nasaHandler(req, res, next); }); } }, {
     name: 'orbital-production-csp',
     apply: 'build',
     transformIndexHtml() {
@@ -20,4 +25,5 @@ export default defineConfig({
       },
     },
   },
+});
 });

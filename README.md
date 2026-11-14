@@ -10,6 +10,8 @@ Simulador educativo de operaciones espaciales en React, TypeScript, Vite y Three
 
 Consulta la [revisión del observatorio, voz, API y rendimiento](docs/auditoria-observatorio.md) para los últimos cambios y sus pruebas.
 
+El menú **NASA** consulta observaciones reales mediante un servidor local; configuración, catálogo y requisitos de publicación en [APIs de NASA y JPL](docs/apis-nasa.md).
+
 ## THE LAST HORIZON
 
 La campaña comienza en la Tierra y desbloquea los capítulos siguientes al completar una misión. El comandante explica los controles, la ingeniería y el lanzamiento; la guía puede omitirse o revisarse. Su panel permite escuchar transmisiones mediante la síntesis de voz del navegador, ajustar el volumen, activar o desactivar voz, efectos y subtítulos, reproducir música ambiental sintetizada y consultar el historial de la sesión. La selección favorece las voces españolas latinoamericanas disponibles; su timbre y disponibilidad dependen del sistema. Los subtítulos resaltan palabras cuando el navegador proporciona eventos de posición, y permanecen legibles si no los proporciona. La reproducción de voz requiere una primera interacción del jugador.

@@ -3,3 +3,5 @@ dist/
 *.tsbuildinfo
 .env*
 !.env.example
+# Las claves de servicios deben permanecer fuera de Git.
+.env.local
