@@ -158,15 +158,15 @@ function App() {
             </div>
           </section>
         ) : screen === 'engineering' ? (
-          <MissionEngineering key={mission.id} mission={mission} shipId={shipId} onCancel={() => setScreen('mission')} currentTarget={scienceTarget} onLaunch={(next, target) => { setScienceTarget(target); writeStorage('orbital-command-eonet-target-v1', JSON.stringify(target)); setDesign(next); setShipId(next.ship); setArrival(null); setScreen('transit'); }} />
+          <MissionEngineering language={language} key={mission.id} mission={mission} shipId={shipId} onCancel={() => setScreen('mission')} currentTarget={scienceTarget} onLaunch={(next, target) => { setScienceTarget(target); writeStorage('orbital-command-eonet-target-v1', JSON.stringify(target)); setDesign(next); setShipId(next.ship); setArrival(null); setScreen('transit'); }} />
         ) : screen === 'transit' ? (
           <MissionTransit key={mission.id} mission={mission} design={design} onCancel={() => setScreen('engineering')} onArrive={(state) => { setArrival(state); setScreen('exploration'); }} />
         ) : screen === 'nasa' ? (
-          <NASAData onExit={() => setScreen('home')} />
+          <NASAData language={language} onExit={() => setScreen('home')} />
         ) : screen === 'reports' ? (
-          <MissionReports onExit={() => setScreen('home')} />
+          <MissionReports language={language} onExit={() => setScreen('home')} />
         ) : (
-          <ExplorationScene mission={mission} onExit={() => setScreen('home')} shipId={shipId} design={design} arrival={arrival} scienceTarget={mission.id === 'earth' ? scienceTarget : null} />
+          <ExplorationScene language={language} mission={mission} onExit={() => setScreen('home')} shipId={shipId} design={design} arrival={arrival} scienceTarget={mission.id === 'earth' ? scienceTarget : null} />
         )}
         </Suspense></SceneBoundary>
         </div>
