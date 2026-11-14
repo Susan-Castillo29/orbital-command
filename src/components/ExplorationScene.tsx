@@ -1,3 +1,4 @@
+import { orbitProfiles } from '../systems/engineering';
 import FullscreenControl from './FullscreenControl';
 import { attachRenderQuality } from '../systems/renderQuality';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
@@ -347,7 +348,7 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
   const [cockpit, setCockpit] = useState(false);
   const [message, setMessage] = useState('Navegación libre activa · selecciona un astro o marca una ruta.');
   const scanEnergy = 5 + instruments[design.instrument].power * 2;
-  const scanStorage = instruments[design.instrument].data * 100 / hulls[design.ship].storage;
+  const scanStorage = instruments[design.instrument].data * orbitProfiles[design.orbit ?? 'balanced'].coverage * 100 / hulls[design.ship].storage;
 
   useEffect(() => { tutorialDismissedRef.current = tutorialDismissed; }, [tutorialDismissed]);
   useEffect(() => {
@@ -901,7 +902,7 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
       if (modeNow !== 'orbit' || selectedNow !== mission.targetBodyId || currentResources.storage <= 0) return;
       if (performance.now() < nextWindowAt) { setMessageForSeconds('La siguiente ventana de comunicación aún no está disponible.'); return; }
       if (currentResources.energy < 2 || currentResources.communications < 2) { setMessageForSeconds('Energía o enlace insuficientes para transmitir el paquete.'); return; }
-      const transmitted = radios[design.radio].data * 100 / hulls[design.ship].storage;
+      const transmitted = (radios[design.radio].data * orbitProfiles[design.orbit ?? 'balanced'].downlinkFactor) * 100 / hulls[design.ship].storage;
       nextWindowAt = performance.now() + 3000; setWindowCooldown(3);
       const nextBuffers = transmitBufferedData(currentBuffers, kind, transmitted);
       commitBuffers(nextBuffers);
@@ -1060,7 +1061,7 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
       }
       if (currentSurvey.scannedRegions.length < 3) { setMessageForSeconds('Completa los tres sectores científicos antes de transmitir.'); return; }
       if (performance.now() < nextWindowAt) { setMessageForSeconds('Espera la siguiente ventana de comunicación.'); return; }
-      if (currentResources.storage * hulls[design.ship].storage / 100 > radios[design.radio].data + 0.0001) { setMessageForSeconds('El paquete supera la capacidad de esta ventana. Transmite paquetes parciales antes del informe final.'); return; }
+      if (currentResources.storage * hulls[design.ship].storage / 100 > (radios[design.radio].data * orbitProfiles[design.orbit ?? 'balanced'].downlinkFactor) + 0.0001) { setMessageForSeconds('El paquete supera la capacidad de esta ventana. Transmite paquetes parciales antes del informe final.'); return; }
       if (currentResources.communications < 15 || currentResources.energy < 5) { setMessageForSeconds('Recursos de comunicación insuficientes para el uplink orbital.'); return; }
       commitResources({ communications: currentResources.communications - 15, energy: currentResources.energy - 5, storage: 0 });
       commitBuffers(emptyDataBuffers());
@@ -1512,7 +1513,7 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
     if (mode !== 'orbit' || selectedId !== mission.targetBodyId) { setMessage(`Vuelve a la órbita de ${mission.destination} para transmitir.`); return; }
     if (resources.communications < 15 || resources.energy < 5) { setMessage('Uplink no disponible: faltan energía o capacidad de comunicación.'); return; }
     if (windowCooldown > 0) { setMessage('Espera la siguiente ventana de comunicación.'); return; }
-    if (resources.storage * hulls[design.ship].storage / 100 > radios[design.radio].data + 0.0001) { setMessage('El paquete supera esta ventana. Transmite paquetes parciales para liberar datos.'); return; }
+    if (resources.storage * hulls[design.ship].storage / 100 > (radios[design.radio].data * orbitProfiles[design.orbit ?? 'balanced'].downlinkFactor) + 0.0001) { setMessage('El paquete supera esta ventana. Transmite paquetes parciales para liberar datos.'); return; }
     const signalSeconds = estimatedSignalSeconds(mission.id, resources.elapsedMinutes / 1440);
     const displaySeconds = compressedTransmissionSeconds(signalSeconds);
     setTransmissionCountdown(displaySeconds);

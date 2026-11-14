@@ -11,6 +11,7 @@ export function loadTransit(mission: Mission, design: MissionDesign): SavedTrans
     const value = JSON.parse(readStorage(keyFor(mission.id)) ?? 'null') as SavedTransit | null;
     if (!value || !value.design || !value.state || !Number.isInteger(value.launchDay) || value.launchDay < 0 || value.launchDay > 99999) return null;
     for (const key of ['ship', 'instrument', 'power', 'radio', 'launcher', 'thermal'] as const) if (value.design[key] !== design[key]) return null;
+    if ((value.design.orbit ?? 'balanced') !== (design.orbit ?? 'balanced') || (value.design.difficulty ?? 'standard') !== (design.difficulty ?? 'standard')) return null;
     const expected = createTransit(mission, design, value.launchDay);
     const state = value.state;
     if (state.durationDays !== expected.durationDays || state.distanceKm !== expected.distanceKm) return null;

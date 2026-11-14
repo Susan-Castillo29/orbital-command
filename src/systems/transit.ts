@@ -1,4 +1,4 @@
-import { evaluateDesign, instruments, launchers, powerSystems, type MissionDesign } from './engineering.ts';
+import { evaluateDesign, instruments, launchers, powerSystems, orbitProfiles, difficultyProfiles, type MissionDesign } from './engineering.ts';
 import type { Mission } from '../data/missions';
 
 export type TransitProfile = { days: number; distanceKm: number; synodicDays: number; source: string };
@@ -28,18 +28,27 @@ export function createTransit(mission: Mission, design: MissionDesign, launchDay
   const efficiency = 1 + Math.min(phase, 1 - phase) * 0.4;
   const designCost = evaluateDesign(design, mission);
   const loadFactor = designCost.mass / launchers[design.launcher].capacity;
-  const durationFactor = 1 + Math.max(0, loadFactor - 0.5) * 0.12;
-  return { elapsedDays: 0, durationDays: profile.days * efficiency * durationFactor, distanceKm: profile.distanceKm * efficiency, fuel: Math.max(0, designCost.fuel - (efficiency - 1) * 20 - loadFactor * 8), energy: 100, integrity: 100, data: 0, decision: 'pending', choice: null };
+  const orbit = orbitProfiles[design.orbit ?? 'balanced'];
+  const difficulty = difficultyProfiles[design.difficulty ?? 'standard'];
+  const durationFactor = (1 + Math.max(0, loadFactor - 0.5) * 0.12) * orbit.durationFactor;
+  return { elapsedDays: 0, durationDays: profile.days * efficiency * durationFactor, distanceKm: profile.distanceKm * efficiency, fuel: Math.min(100, Math.max(0, (designCost.fuel - (efficiency - 1) * 20 - loadFactor * 8 - (orbit.fuelFactor - 1) * 20) * difficulty.reserveFactor)), energy: Math.min(100, 100 * difficulty.reserveFactor), integrity: 100, data: 0, decision: 'pending', choice: null };
+}
+
+export function transitFailure(state: TransitState): 'energy' | 'integrity' | 'manoeuvre' | null {
+  if (state.integrity <= 0) return 'integrity';
+  if (state.energy <= 0) return 'energy';
+  if (state.decision === 'required' && state.fuel < 3 && state.energy < 6) return 'manoeuvre';
+  return null;
 }
 
 export function advanceTransit(state: TransitState, days: number, design: MissionDesign): TransitState {
-  if (!Number.isFinite(days) || days <= 0 || state.decision === 'required' || state.elapsedDays >= state.durationDays) return state;
+  if (!Number.isFinite(days) || days <= 0 || transitFailure(state) || state.decision === 'required' || state.elapsedDays >= state.durationDays) return state;
   const stopAt = state.decision === 'pending' ? state.durationDays / 2 : state.durationDays;
-  const elapsedDays = Math.min(stopAt, state.elapsedDays + days);
+  const energyRate = (0.0015 + instruments[design.instrument].power / powerSystems[design.power].power * 0.002) * difficultyProfiles[design.difficulty ?? 'standard'].consumptionFactor;
+  const elapsedDays = Math.min(stopAt, state.elapsedDays + days, state.elapsedDays + state.energy / energyRate);
   const delta = elapsedDays - state.elapsedDays;
-  const energyRate = 0.0015 + instruments[design.instrument].power / powerSystems[design.power].power * 0.002;
   const dataRate = instruments[design.instrument].data / 8 * 0.001;
-  return { ...state, elapsedDays, energy: Math.max(0, state.energy - delta * energyRate), fuel: Math.max(0, state.fuel - delta * 0.0008), data: Math.min(100, state.data + delta * dataRate), decision: state.decision === 'pending' && elapsedDays >= stopAt ? 'required' : state.decision };
+  return { ...state, elapsedDays, energy: state.energy - delta * energyRate < 1e-9 ? 0 : state.energy - delta * energyRate, fuel: Math.max(0, state.fuel - delta * 0.0008), data: Math.min(100, state.data + delta * dataRate), decision: state.decision === 'pending' && elapsedDays >= stopAt ? 'required' : state.decision };
 }
 
 export function resolveTransitDecision(state: TransitState, choice: 'fuel' | 'energy'): TransitState | null {

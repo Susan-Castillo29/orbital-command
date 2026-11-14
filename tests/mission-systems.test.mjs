@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { defaultDesign, evaluateDesign, initialDesign } from '../src/systems/engineering.ts';
-import { advanceTransit, createTransit, resolveTransitDecision } from '../src/systems/transit.ts';
+import { advanceTransit, createTransit, resolveTransitDecision, transitFailure } from '../src/systems/transit.ts';
 import { chapterUnlocked } from '../src/systems/campaign.ts';
 import { createScienceReport } from '../src/systems/science.ts';
 import { estimatedSignalSeconds, compressedTransmissionSeconds } from '../src/systems/communications.ts';
@@ -95,4 +95,32 @@ test('la tormenta marciana sigue el tiempo simulado y no afecta a otros destinos
   assert.equal(isSimulatedDustStorm('mars', 10), true);
   assert.equal(isSimulatedDustStorm('mars', 16), false);
   assert.equal(isSimulatedDustStorm('moon', 10), false);
+});
+
+
+test('orbital profile changes payload, downlink, duration and fuel in the educational model', () => {
+  const balanced = { ...initialDesign, launcher: 'medium', orbit: 'balanced' };
+  const survey = { ...balanced, orbit: 'survey' };
+  const relay = { ...balanced, orbit: 'relay' };
+  assert.ok(evaluateDesign(survey, mission).orbitalCapacity < evaluateDesign(balanced, mission).orbitalCapacity);
+  assert.ok(evaluateDesign(relay, mission).downlinkRate > evaluateDesign(survey, mission).downlinkRate);
+  assert.ok(createTransit(mission, survey, 0).durationDays > createTransit(mission, balanced, 0).durationDays);
+  assert.ok(createTransit(mission, survey, 0).fuel < createTransit(mission, balanced, 0).fuel);
+  assert.ok(evaluateDesign({ ...initialDesign, ship: 'atlas', orbit: 'survey' }, mission).errors.some(error => error.includes('órbita')));
+});
+
+test('difficulty changes reserves and consumption and can cause a recoverable mission failure', () => {
+  const target = { id: 'neptune', budget: 1100 };
+  const standard = { ...defaultDesign('neptune', 'pioneer'), difficulty: 'standard' };
+  const hard = { ...standard, difficulty: 'challenging' };
+  const initial = createTransit(target, hard, 0);
+  assert.ok(initial.energy < createTransit(target, standard, 0).energy);
+  const midpoint = advanceTransit(initial, 100000, hard);
+  const resolved = resolveTransitDecision(midpoint, 'fuel');
+  assert.ok(resolved);
+  const ended = advanceTransit(resolved, 100000, hard);
+  assert.equal(transitFailure(ended), 'energy');
+  assert.ok(ended.elapsedDays < ended.durationDays);
+  assert.deepEqual(advanceTransit(ended, 1, hard), ended);
+  assert.equal(transitFailure({ ...midpoint, fuel: 0, energy: 5 }), 'manoeuvre');
 });

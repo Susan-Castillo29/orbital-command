@@ -6,7 +6,20 @@ export type PowerId = 'solar' | 'nuclear';
 export type RadioId = 'standard' | 'deep';
 export type LauncherId = 'light' | 'medium' | 'heavy';
 export type ThermalId = 'standard' | 'shielded';
-export type MissionDesign = { ship: ShipId; instrument: InstrumentId; power: PowerId; radio: RadioId; launcher: LauncherId; thermal: ThermalId };
+export type OrbitId = 'balanced' | 'survey' | 'relay';
+export type DifficultyId = 'standard' | 'guided' | 'challenging';
+export type MissionDesign = { ship: ShipId; instrument: InstrumentId; power: PowerId; radio: RadioId; launcher: LauncherId; thermal: ThermalId; orbit?: OrbitId; difficulty?: DifficultyId };
+// Educational profiles: these factors illustrate trade-offs, not a flight-certified orbital model.
+export const orbitProfiles = {
+  balanced: { capacityFactor: 1, fuelFactor: 1, durationFactor: 1, coverage: 1, downlinkFactor: 1 },
+  survey: { capacityFactor: 0.8, fuelFactor: 1.15, durationFactor: 1.08, coverage: 1.3, downlinkFactor: 0.8 },
+  relay: { capacityFactor: 0.9, fuelFactor: 1.08, durationFactor: 1.15, coverage: 0.8, downlinkFactor: 1.3 },
+} as const;
+export const difficultyProfiles = {
+  guided: { reserveFactor: 1.1, consumptionFactor: 0.65 },
+  standard: { reserveFactor: 1, consumptionFactor: 1 },
+  challenging: { reserveFactor: 0.8, consumptionFactor: 7.5 },
+} as const;
 
 export const hulls = {
   pioneer: { name: 'Pioneer', mass: 380, cost: 85, storage: 55 },
@@ -52,17 +65,19 @@ export function evaluateDesign(design: MissionDesign, mission: Mission) {
   const radio = radios[design.radio];
   const launcher = launchers[design.launcher];
   const thermal = thermalSystems[design.thermal];
+  const orbit = orbitProfiles[design.orbit ?? 'balanced'];
+  const orbitalCapacity = Math.floor(launcher.capacity * orbit.capacityFactor);
   const mass = hull.mass + instrument.mass + power.mass + radio.mass + thermal.mass;
   const cost = hull.cost + instrument.cost + power.cost + radio.cost + launcher.cost + thermal.cost;
   const powerMargin = Number((power.power - 1 - instrument.power).toFixed(1));
   const errors: string[] = [];
   const warnings: string[] = [];
-  if (mass > launcher.capacity) errors.push(`La nave pesa ${mass} kg y el lanzador admite ${launcher.capacity} kg. Reduce masa o elige un lanzador de mayor capacidad.`);
+  if (mass > orbitalCapacity) errors.push(`La nave pesa ${mass} kg y el lanzador admite ${orbitalCapacity} kg para esta órbita. Reduce masa, cambia de órbita o elige un lanzador de mayor capacidad.`);
   if (cost > mission.budget) errors.push(`El coste de ${cost} CR supera el presupuesto de ${mission.budget} CR. Cambia componentes para equilibrar la misión.`);
   if (powerMargin < 0) errors.push(`El instrumento y la nave necesitan más potencia de la disponible. Mejora la fuente o reduce el consumo científico.`);
   if (requiresThermalProtection(mission.id) && design.thermal !== 'shielded') errors.push('Este destino requiere protección térmica reforzada para la sonda en el modelo de misión.');
   if (requiresEnvironmentalSensors(mission.id) && design.instrument === 'camera') errors.push('El objetivo requiere un espectrómetro con sensores ambientales; una cámara sola no mide estas condiciones.');
-  if (instrument.data > radio.data) warnings.push('El instrumento produce datos más rápido que la antena: tendrás que almacenarlos o priorizar su transmisión.');
+  if (instrument.data * orbit.coverage > radio.data * orbit.downlinkFactor) warnings.push('El instrumento produce datos más rápido que la antena: tendrás que almacenarlos o priorizar su transmisión.');
   if (design.power === 'solar' && ['jupiter', 'europa', 'saturn', 'titan', 'uranus', 'neptune'].includes(mission.id)) warnings.push('La luz solar disminuye con la distancia; este modelo simplificado no calcula la potencia solar real. Considera el generador de larga duración.');
-  return { mass, cost, powerMargin, storage: hull.storage, dataRate: instrument.data, downlinkRate: radio.data, science: instrument.science, fuel: launcher.fuel, errors, warnings };
+  return { mass, cost, powerMargin, storage: hull.storage, dataRate: Number((instrument.data * orbit.coverage).toFixed(1)), downlinkRate: Number((radio.data * orbit.downlinkFactor).toFixed(1)), orbitalCapacity, coverage: orbit.coverage, science: instrument.science, fuel: launcher.fuel, errors, warnings };
 }

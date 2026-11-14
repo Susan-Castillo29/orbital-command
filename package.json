@@ -15,7 +15,8 @@
     "test": "node --test tests/*.test.mjs",
     "test:browser": "node tests/browser-e2e.cjs",
     "test:accessibility": "node tests/browser-accessibility.cjs",
-    "test:impact": "node tests/browser-impact.cjs"
+    "test:impact": "node tests/browser-impact.cjs",
+    "test:engineering": "node tests/browser-engineering.cjs"
   },
   "dependencies": {
     "react": "^19.1.0",

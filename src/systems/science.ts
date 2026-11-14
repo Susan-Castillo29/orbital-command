@@ -1,5 +1,5 @@
 import type { Mission } from '../data/missions';
-import { instruments, launchers, type MissionDesign } from './engineering.ts';
+import { instruments, launchers, orbitProfiles, type MissionDesign } from './engineering.ts';
 import type { ExplorationResources } from './lunarCampaign';
 import { readStorage, writeStorage } from './storage.ts';
 import type { LabReading } from '../data/planetaryLab';
@@ -45,7 +45,7 @@ export function createScienceReport(mission: Mission, design: MissionDesign, res
     instrument: instrument.name,
     observations: regions.map((region, index) => ({ region, value: 20 + (seed + index * 17) % 65, unit: 'índice simulado / 100' })),
     ...(mission.id === 'earth' && eonetTarget && isEonetTarget(eonetTarget) ? { eonetTarget } : {}),
-    samples, transmittedUnits: Number((regions.length * instrument.data + modelReadings.length * instrument.data / 3).toFixed(1)), fuelRemaining: resources.fuel,
+    samples, transmittedUnits: Number((regions.length * instrument.data * orbitProfiles[design.orbit ?? 'balanced'].coverage + modelReadings.length * instrument.data / 3).toFixed(1)), fuelRemaining: resources.fuel,
     energyRemaining: resources.energy, integrity: resources.integrity, elapsedDays: resources.elapsedMinutes / 1440,
     score: Math.round(instrument.science * 0.6 + resources.integrity * 0.4), significance: context.significance, source: context.source, modelReadings,
     problems: [...(maneuver ? [`Corrección de trayectoria resuelta mediante ${maneuver === 'fuel' ? 'combustible' : 'energía'}.`] : []), ...events], photos,

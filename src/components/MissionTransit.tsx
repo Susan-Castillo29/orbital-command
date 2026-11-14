@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Mission } from '../data/missions';
 import type { MissionDesign } from '../systems/engineering';
-import { advanceTransit, createTransit, resolveTransitDecision, transitProfiles, type TransitState } from '../systems/transit';
+import { advanceTransit, createTransit, resolveTransitDecision, transitFailure, transitProfiles, type TransitState } from '../systems/transit';
 import { playSound } from '../systems/audio';
 import { clearTransit, loadTransit, saveTransit } from '../systems/transitStorage';
 import './mission-systems.css';
 
-type Props = { mission: Mission; design: MissionDesign; onArrive: (state: TransitState) => void; onCancel: () => void };
+type Props = { mission: Mission; design: MissionDesign; onArrive: (state: TransitState) => void; onCancel: () => void; language: 'en' | 'es' };
 const dayFormat = (day: number) => day < 1 ? day.toFixed(1) : Math.floor(day).toLocaleString('es-DO');
 
-export default function MissionTransit({ mission, design, onArrive, onCancel }: Props) {
+export default function MissionTransit({ mission, design, onArrive, onCancel, language }: Props) {
+  const t = (es: string, en: string) => language === 'es' ? es : en;
   const [saved] = useState(() => loadTransit(mission, design));
   const [launchDay, setLaunchDay] = useState(saved?.launchDay ?? 0);
   const [state, setState] = useState(() => saved?.state ?? createTransit(mission, design, 0));
@@ -44,7 +45,7 @@ export default function MissionTransit({ mission, design, onArrive, onCancel }: 
     }
   }, [started, state]);
   useEffect(() => {
-    if (!started || rate === 0 || state.decision === 'required' || state.elapsedDays >= state.durationDays) return;
+    if (!started || rate === 0 || transitFailure(state) || state.decision === 'required' || state.elapsedDays >= state.durationDays) return;
     last.current = performance.now();
     const timer = window.setInterval(() => {
       const now = performance.now();
@@ -53,16 +54,18 @@ export default function MissionTransit({ mission, design, onArrive, onCancel }: 
       setState((previous) => advanceTransit(previous, seconds * rate / 24, design));
     }, 200);
     return () => window.clearInterval(timer);
-  }, [started, rate, state.decision, state.elapsedDays >= state.durationDays, design]);
+  }, [started, rate, state.decision, state.elapsedDays >= state.durationDays, transitFailure(state), design]);
   const progress = Math.min(1, state.elapsedDays / state.durationDays);
-  const done = progress >= 1;
+  const failure = started ? transitFailure(state) : null;
+  const done = progress >= 1 && !failure;
   const speed = state.distanceKm / state.durationDays / 24;
   return <section className="systems-screen transit-screen" aria-label="Viaje interplanetario">
     <header className="systems-heading"><div><span>THE LAST HORIZON · CONTROL DE VUELO</span><h1>Rumbo a {mission.destination}</h1><p>Trayectoria educativa aproximada: las duraciones cambian según posiciones, propulsión y maniobras. No son efemérides reales.</p>{saved && <p>Trayecto recuperado y pausado. Reanuda cuando estés listo.</p>}</div><button className="systems-secondary" onClick={() => { if (!started || window.confirm('¿Abortar el trayecto? Se borrará su progreso de vuelo.')) { clearTransit(mission.id); onCancel(); } }}>← ABORTAR TRAYECTO</button></header>
     <div className="transit-visual"><div className="transit-orbit" /><div className="transit-planet">✦</div><div className="transit-route"><span>TIERRA</span><div><i style={{ width: `${progress * 100}%` }} /></div><span>{mission.destination.toUpperCase()}</span></div></div>
     <div className="systems-card"><div className="systems-grid"><div><small>DÍA DE MISIÓN</small><b>{dayFormat(state.elapsedDays + 1)}</b></div><div><small>TRANSCURRIDO</small><b>{dayFormat(state.elapsedDays)} días</b></div><div><small>DURACIÓN ESTIMADA</small><b>{dayFormat(state.durationDays)} días</b></div><div><small>TIEMPO RESTANTE</small><b>{dayFormat(Math.max(0, state.durationDays - state.elapsedDays))} días</b></div><div><small>DISTANCIA RECORRIDA</small><b>{Math.round(state.distanceKm * progress).toLocaleString('es-DO')} km</b></div><div><small>DISTANCIA RESTANTE</small><b>{Math.round(state.distanceKm * (1 - progress)).toLocaleString('es-DO')} km</b></div><div><small>VELOCIDAD MEDIA ESTIMADA</small><b>{Math.round(speed).toLocaleString('es-DO')} km/h</b></div><div><small>SISTEMAS</small><b>{state.energy > 20 && state.integrity > 20 ? 'ESTABLES' : 'REVISAR'}</b></div><div><small>COMBUSTIBLE</small><b>{Math.round(state.fuel)}%</b></div><div><small>ENERGÍA</small><b>{Math.round(state.energy)}%</b></div></div>
       {!started ? <div className="launch-window"><label>Día de lanzamiento simulado <input type="number" min="0" max="99999" disabled={countdown !== null} value={launchDay} onChange={(e) => { const day = Math.max(0, Math.min(99999, Number(e.target.value) || 0)); setLaunchDay(day); setState(createTransit(mission, design, day)); }} /></label><p>La ventana usa un ciclo y una fase ficticios para mostrar cómo cambian duración y combustible; no predice fechas reales.</p><button className="systems-primary" disabled={countdown !== null} onClick={() => { setCountdown(3); window.dispatchEvent(new CustomEvent('orbital-commander-transmission', { detail: { id: 'countdown', title: 'CUENTA REGRESIVA', text: 'Sistemas verificados. Iniciamos la cuenta regresiva. Confía en tu preparación; nos vemos en órbita.' } })); }}>INICIAR TRAYECTO →</button>{countdown !== null && <div className="launch-countdown" role="status"><span className="launch-rocket">▲</span><strong>T − {countdown}</strong><small>SECUENCIA DE LANZAMIENTO</small></div>}</div> : <div className="time-controls"><span>TIEMPO SIMULADO · 1 segundo = 1 hora a ×1</span>{[0, 1, 10, 100, 1000].map((value) => <button key={value} aria-pressed={rate === value} onClick={() => setRate(value)}>{value === 0 ? 'PAUSA' : `×${value}`}</button>)}</div>}
-      {state.decision === 'required' && <div className="systems-alert" role="alert"><strong>DECISIÓN DE TRAYECTORIA · el tiempo está detenido</strong><p>Una corrección intermedia exige recursos. Elige una maniobra para continuar.</p><div className="decision-actions"><button disabled={state.fuel < 3} onClick={() => setState((previous) => resolveTransitDecision(previous, 'fuel') ?? previous)}>IMPULSO · −3% COMBUSTIBLE</button><button disabled={state.energy < 6} onClick={() => setState((previous) => resolveTransitDecision(previous, 'energy') ?? previous)}>NAVEGACIÓN ELÉCTRICA · −6% ENERGÍA</button></div></div>}
+      {state.decision === 'required' && !failure && <div className="systems-alert" role="alert"><strong>DECISIÓN DE TRAYECTORIA · el tiempo está detenido</strong><p>Una corrección intermedia exige recursos. Elige una maniobra para continuar.</p><div className="decision-actions"><button disabled={state.fuel < 3} onClick={() => setState((previous) => resolveTransitDecision(previous, 'fuel') ?? previous)}>IMPULSO · −3% COMBUSTIBLE</button><button disabled={state.energy < 6} onClick={() => setState((previous) => resolveTransitDecision(previous, 'energy') ?? previous)}>NAVEGACIÓN ELÉCTRICA · −6% ENERGÍA</button></div></div>}
+      {failure && <section className="systems-alert" role="alert"><h2>{t('Misión fallida', 'Mission failed')}</h2><p>{failure === 'energy' ? t('La energía se agotó antes de completar el trayecto. Sin energía no pueden operar los sistemas ni las comunicaciones.', 'Energy ran out before the journey was complete. Systems and communications cannot operate without power.') : failure === 'integrity' ? t('La integridad de la nave llegó a cero.', 'Spacecraft integrity reached zero.') : t('No quedan reservas suficientes para ninguna corrección de trayectoria.', 'There are insufficient reserves for either course correction.')}</p><p>{t('Revisa la fuente de energía, las reservas, el lanzador y la dificultad antes de intentarlo de nuevo. Este resultado es del modelo educativo.', 'Review the power source, reserves, launcher and difficulty before retrying. This outcome belongs to the educational model.')}</p><button className="systems-secondary" onClick={() => { clearTransit(mission.id); setStarted(false); setRate(1); setState(createTransit(mission, design, launchDay)); }}>{t('REINTENTAR TRAYECTO', 'RETRY JOURNEY')}</button> <button className="systems-secondary" onClick={() => { clearTransit(mission.id); onCancel(); }}>{t('REVISAR DISEÑO', 'REVIEW DESIGN')}</button></section>}
       {done && <button className="systems-primary" onClick={() => { clearTransit(mission.id); onArrive(state); }}>ESTABLECER ÓRBITA DE {mission.destination.toUpperCase()} →</button>}
       <p className="systems-reference">Perfil orientativo basado en <a href={profile.source} target="_blank" rel="noreferrer">referencias de NASA</a>; distancia y velocidad son estimaciones del modelo.</p>
     </div>

@@ -164,7 +164,7 @@ function App() {
         ) : screen === 'engineering' ? (
           <MissionEngineering guided={visualGuide === "confirm"} language={language} key={mission.id} mission={mission} shipId={shipId} onCancel={() => setScreen('mission')} currentTarget={scienceTarget} onLaunch={(next, target) => { if (visualGuide === "confirm") finishVisualGuide(); setScienceTarget(target); writeStorage('orbital-command-eonet-target-v1', JSON.stringify(target)); setDesign(next); setShipId(next.ship); setArrival(null); setScreen('transit'); }} />
         ) : screen === 'transit' ? (
-          <MissionTransit key={mission.id} mission={mission} design={design} onCancel={() => setScreen('engineering')} onArrive={(state) => { setArrival(state); setScreen('exploration'); }} />
+          <MissionTransit language={language} key={mission.id} mission={mission} design={design} onCancel={() => setScreen('engineering')} onArrive={(state) => { setArrival(state); setScreen('exploration'); }} />
         ) : screen === 'nasa' ? (
           <NASAData language={language} onExit={() => setScreen('home')} />
         ) : screen === 'reports' ? (
