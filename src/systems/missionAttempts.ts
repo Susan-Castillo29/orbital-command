@@ -3,7 +3,7 @@ import type { MissionDesign } from './engineering.ts';
 import type { TransitState } from './transit.ts';
 
 export type FailedAttempt = {
-  id: string; missionId: string; missionName: string; destination: string; reason: 'energy' | 'integrity' | 'manoeuvre';
+  id: string; missionId: string; missionName: string; destination: string; phase?: 'transit' | 'exploration'; reason: 'energy' | 'integrity' | 'manoeuvre';
   elapsedDays: number; durationDays: number; energy: number; fuel: number; integrity: number;
   difficulty: string; orbit: string; power: string; instrument: string; launcher: string; decision: string; recordedAt: string;
 };
@@ -14,6 +14,7 @@ function valid(value: unknown): value is FailedAttempt {
   if (!value || typeof value !== 'object') return false;
   const a = value as Record<string, unknown>;
   return ['id','missionId','missionName','destination','difficulty','orbit','power','instrument','launcher','decision','recordedAt'].every(key => typeof a[key] === 'string' && (a[key] as string).length <= 200)
+    && (a.phase === undefined || a.phase === 'transit' || a.phase === 'exploration')
     && ['energy','integrity','manoeuvre'].includes(String(a.reason))
     && ['elapsedDays','durationDays','energy','fuel','integrity'].every(key => bounded(a[key]))
     && (a.elapsedDays as number) <= (a.durationDays as number)
@@ -35,8 +36,8 @@ export function saveFailedAttempt(attempt: FailedAttempt): boolean {
   volatileAttempts = saved ? null : next;
   return saved;
 }
-export function makeFailedAttempt(id: string, mission: { id: string; name: string; destination: string }, design: MissionDesign, state: TransitState, reason: FailedAttempt['reason']): FailedAttempt {
-  return { id, missionId: mission.id, missionName: mission.name, destination: mission.destination, reason,
+export function makeFailedAttempt(id: string, mission: { id: string; name: string; destination: string }, design: MissionDesign, state: TransitState, reason: FailedAttempt['reason'], phase: 'transit' | 'exploration' = 'transit'): FailedAttempt {
+  return { id, missionId: mission.id, missionName: mission.name, destination: mission.destination, phase, reason,
     elapsedDays: state.elapsedDays, durationDays: state.durationDays, energy: state.energy, fuel: state.fuel, integrity: state.integrity,
     difficulty: design.difficulty ?? 'standard', orbit: design.orbit ?? 'balanced', power: design.power, instrument: design.instrument, launcher: design.launcher,
     decision: state.choice ?? 'none', recordedAt: new Date().toISOString() };

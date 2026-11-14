@@ -17,7 +17,9 @@
     "test:accessibility": "node tests/browser-accessibility.cjs",
     "test:impact": "node tests/browser-impact.cjs",
     "test:engineering": "node tests/browser-engineering.cjs",
-    "test:reliability": "node tests/browser-reliability.cjs"
+    "test:reliability": "node tests/browser-reliability.cjs",
+    "test:exploration-failure": "node tests/browser-exploration-failure.cjs",
+    "test:lab-language": "node tests/browser-lab-language.cjs"
   },
   "dependencies": {
     "react": "^19.1.0",

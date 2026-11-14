@@ -3,12 +3,15 @@ import { attachRenderQuality } from '../systems/renderQuality';
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { atmosphereComposition, hasAtmosphereModel, modelFor, type LabReading } from '../data/planetaryLab';
+import { localiseLabText } from '../data/labLocale';
 import type { InstrumentId } from '../systems/engineering';
 import './planetary-lab.css';
 
 type Props = { language: 'en' | 'es'; bodyId: string; destination: string; instrument: InstrumentId; canRecord: boolean; onRecord: (reading: LabReading) => void; onClose: () => void };
 type Metric = 'reflectance' | 'temperature' | 'pressure' | 'density' | 'magnetic' | 'wind' | 'structure';
 export default function PlanetaryLab({ bodyId, destination, instrument, canRecord, onRecord, onClose, language }: Props) {
+  const t = (es: string, en: string) => language === 'es' ? es : en;
+  const local = (value: string) => localiseLabText(value, language);
   const [mode, setMode] = useState<'atmosphere' | 'interior'>(() => hasAtmosphereModel(bodyId) ? 'atmosphere' : 'interior');
   const [index, setIndex] = useState(0);
   const indexRef = useRef(index);
@@ -79,17 +82,17 @@ export default function PlanetaryLab({ bodyId, destination, instrument, canRecor
     ];
   const selectedMetric = metrics.find((item) => item.id === metric) ?? metrics[0];
   const record = () => onRecord({ region: layer.name, label: selectedMetric.label, value: selectedMetric.value, unit: selectedMetric.unit });
-  return <div className="lab-backdrop"><section ref={dialog} className="planetary-lab" data-visualization="lab" role="dialog" aria-modal="true" aria-label={`Laboratorio de ${destination}`}>
-    <header><div><span>SONDA Y MODELO CIENTÍFICO · SIMULACIÓN</span><h2>{bodyId === 'sun' ? 'Observatorio solar' : `Laboratorio de ${destination}`}</h2></div><button onClick={onClose} aria-label="Cerrar laboratorio">×</button></header>
-    <FullscreenControl language={language} label={language === "en" ? "planetary laboratory" : "laboratorio planetario"} /><div className="lab-layout"><div className="lab-model" ref={host} aria-label="Modelo tridimensional de capas" /><div className="lab-controls">
-      {bodyId !== 'sun' && <div className="lab-tabs">{hasAtmosphereModel(bodyId) && <button aria-pressed={mode === 'atmosphere'} onClick={() => { setMode('atmosphere'); setIndex(0); }}>SONDA ATMOSFÉRICA</button>}<button aria-pressed={mode === 'interior'} onClick={() => { setMode('interior'); setIndex(0); }}>INTERIOR VIRTUAL</button></div>}
-      <div className="lab-layers">{layers.map((item, i) => <button key={item.name} aria-pressed={index === i} onClick={() => setIndex(i)}>{String(i + 1).padStart(2, '0')} · {item.name}</button>)}</div>
-      <p>{layer.description}</p>{layer.temperature !== undefined && <p>TEMPERATURA SIMULADA: <strong>{layer.temperature.toLocaleString('es-DO')} °C</strong></p>}{layer.pressure !== undefined && <p>PRESIÓN SIMULADA: <strong>{layer.pressure} bar</strong> · DENSIDAD INDICATIVA: <strong>{layer.density}</strong></p>}
-      {mode === 'atmosphere' && <><p>COMPOSICIÓN GENERAL: {atmosphereComposition[bodyId]}</p><p>VELOCIDAD DE DESCENSO SIMULADA: {Math.round(180 / (index + 1))} m/s</p>{index < layers.length - 1 && <button onClick={() => setIndex(index + 1)}>DESCENDER A LA SIGUIENTE CAPA ↓</button>}</>}
-      <p className="lab-disclaimer">Modelo interactivo educativo, sin escala ni mediciones reales. La selección de capas internas es una visualización, no una perforación.</p>
-      <label className="lab-metric">Lectura disponible para el instrumento<select value={selectedMetric.id} onChange={(event) => setMetric(event.target.value as Metric)}>{metrics.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
-      <button className="lab-record" disabled={!canRecord} onClick={record}>REGISTRAR LECTURA · CONSUME ENERGÍA Y DATOS</button>
-      {!canRecord && <p>Revisa la energía y el espacio de almacenamiento antes de registrar otra lectura.</p>}
+  return <div className="lab-backdrop"><section ref={dialog} className="planetary-lab" data-visualization="lab" role="dialog" aria-modal="true" aria-label={`${t("Laboratorio de", "Laboratory of")} ${destination}`}>
+    <header><div><span>{t("SONDA Y MODELO CIENTÍFICO · SIMULACIÓN", "PROBE AND SCIENTIFIC MODEL · SIMULATION")}</span><h2>{bodyId === 'sun' ? t('Observatorio solar', 'Solar observatory') : `${t("Laboratorio de", "Laboratory of")} ${destination}`}</h2></div><button onClick={onClose} aria-label={t("Cerrar laboratorio", "Close laboratory")}>×</button></header>
+    <FullscreenControl language={language} label={language === "en" ? "planetary laboratory" : "laboratorio planetario"} /><div className="lab-layout"><div className="lab-model" ref={host} aria-label={t("Modelo tridimensional de capas", "Three-dimensional layer model")} /><div className="lab-controls">
+      {bodyId !== 'sun' && <div className="lab-tabs">{hasAtmosphereModel(bodyId) && <button aria-pressed={mode === 'atmosphere'} onClick={() => { setMode('atmosphere'); setIndex(0); }}>{t('SONDA ATMOSFÉRICA', 'ATMOSPHERIC PROBE')}</button>}<button aria-pressed={mode === 'interior'} onClick={() => { setMode('interior'); setIndex(0); }}>{t('INTERIOR VIRTUAL', 'VIRTUAL INTERIOR')}</button></div>}
+      <div className="lab-layers">{layers.map((item, i) => <button key={item.name} aria-pressed={index === i} onClick={() => setIndex(i)}>{String(i + 1).padStart(2, '0')} · {local(item.name)}</button>)}</div>
+      <p>{local(layer.description)}</p>{layer.temperature !== undefined && <p>{t("TEMPERATURA SIMULADA", "SIMULATED TEMPERATURE")}: <strong>{layer.temperature.toLocaleString('es-DO')} °C</strong></p>}{layer.pressure !== undefined && <p>{t("PRESIÓN SIMULADA", "SIMULATED PRESSURE")}: <strong>{layer.pressure} bar</strong> · {t("DENSIDAD INDICATIVA", "INDICATIVE DENSITY")}: <strong>{layer.density}</strong></p>}
+      {mode === 'atmosphere' && <><p>{t("COMPOSICIÓN GENERAL", "GENERAL COMPOSITION")}: {local(atmosphereComposition[bodyId] ?? "")}</p><p>{t("VELOCIDAD DE DESCENSO SIMULADA", "SIMULATED DESCENT SPEED")}: {Math.round(180 / (index + 1))} m/s</p>{index < layers.length - 1 && <button onClick={() => setIndex(index + 1)}>{t('DESCENDER A LA SIGUIENTE CAPA ↓', 'DESCEND TO NEXT LAYER ↓')}</button>}</>}
+      <p className="lab-disclaimer">{t('Modelo interactivo educativo, sin escala ni mediciones reales. La selección de capas internas es una visualización, no una perforación.', 'Educational interactive model, not to scale or based on actual measurements. Internal layers are visualisations, not a drilling operation.')}</p>
+      <label className="lab-metric">{t("Lectura disponible para el instrumento", "Reading available for the instrument")}<select value={selectedMetric.id} onChange={(event) => setMetric(event.target.value as Metric)}>{metrics.map((item) => <option key={item.id} value={item.id}>{local(item.label)}</option>)}</select></label>
+      <button className="lab-record" disabled={!canRecord} onClick={record}>{t('REGISTRAR LECTURA · CONSUME ENERGÍA Y DATOS', 'RECORD READING · USES ENERGY AND DATA')}</button>
+      {!canRecord && <p>{t('Revisa la energía y el espacio de almacenamiento antes de registrar otra lectura.', 'Check energy and storage before recording another reading.')}</p>}
     </div></div>
   </section></div>;
 }

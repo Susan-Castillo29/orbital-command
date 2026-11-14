@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { Mission } from '../data/missions';
+import { localiseMission } from '../data/missionLocale';
 import { celestialBodies } from '../data/celestialBodies';
 import type { ShipId } from '../data/ships';
 import { loadPlanetTexture } from '../systems/planetTextures';
@@ -323,12 +324,14 @@ export default function SolarSystemScene({ mission, onSelect, shipId, language }
     };
   }, [shipId]);
 
+  const displayDestination = localiseMission(mission, language).destination;
+  const t = (es: string, en: string) => language === 'es' ? es : en;
   return (
-    <div className="space-scene" data-visualization="solar" ref={hostRef} aria-label={`Vista 3D del sistema solar; destino seleccionado: ${mission.destination}`}>
-      <FullscreenControl language={language} label={language === "en" ? "solar system" : "sistema solar"} /><div className="scene-topline"><span><i className="live-dot" /> VISUALIZACIÓN EN VIVO</span><span>SECTOR SOL · 01</span></div>
-      <div className="observatory-controls"><button onClick={() => window.dispatchEvent(new CustomEvent('orbital-focus-body', { detail: mission.targetBodyId }))}>Observar {mission.destination}</button><button onClick={() => window.dispatchEvent(new Event('orbital-overview'))}>Sistema completo</button></div>
-      <div className="scene-controls-hint"><span>DRAG <b>ROTAR</b></span><span>SCROLL <b>ZOOM</b></span><span>CLICK <b>SELECCIONAR</b></span></div>
-      <div className="scene-scale"><span>ÓRBITAS Y TAMAÑOS DIFERENCIADOS</span><div><i /></div><small>DISTANCIA COMPRIMIDA · TAMAÑO EXAGERADO</small></div>
+    <div className="space-scene" data-visualization="solar" ref={hostRef} aria-label={`${t('Vista 3D del sistema solar; destino seleccionado', '3D solar system view; selected destination')}: ${displayDestination}`}>
+      <FullscreenControl language={language} label={language === "en" ? "solar system" : "sistema solar"} /><div className="scene-topline"><span><i className="live-dot" /> {t("VISUALIZACIÓN EN VIVO", "LIVE VISUALISATION")}</span><span>SECTOR SOL · 01</span></div>
+      <div className="observatory-controls"><button onClick={() => window.dispatchEvent(new CustomEvent('orbital-focus-body', { detail: mission.targetBodyId }))}>{t("Observar", "Observe")} {displayDestination}</button><button onClick={() => window.dispatchEvent(new Event('orbital-overview'))}>{t("Sistema completo", "Full system")}</button></div>
+      <div className="scene-controls-hint"><span>DRAG <b>{t("ROTAR", "ROTATE")}</b></span><span>SCROLL <b>ZOOM</b></span><span>CLICK <b>{t("SELECCIONAR", "SELECT")}</b></span></div>
+      <div className="scene-scale"><span>{t("ÓRBITAS Y TAMAÑOS DIFERENCIADOS", "DISTINCT ORBITS AND SIZES")}</span><div><i /></div><small>{t("DISTANCIA COMPRIMIDA · TAMAÑO EXAGERADO", "DISTANCE COMPRESSED · SIZE EXAGGERATED")}</small></div>
     </div>
   );
 }
