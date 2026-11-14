@@ -285,6 +285,18 @@ function makeShip(shipId: ShipId) {
     strut.position.set(side * 0.42, 0, 0.08);
     ship.add(strut);
   }
+  const trim = new THREE.Mesh(new THREE.TorusGeometry(shipId === 'atlas' ? 0.29 : 0.2, 0.018, 6, 20), new THREE.MeshStandardMaterial({ color: '#d9b878', metalness: 0.7, roughness: 0.3 }));
+  trim.position.z = 0.28;
+  ship.add(trim);
+  const sensor = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 6), new THREE.MeshBasicMaterial({ color: '#82e9ff' }));
+  sensor.position.set(0, 0.2, -0.25);
+  ship.add(sensor);
+  for (const side of [-1, 1]) {
+    const thruster = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.075, 0.16, 8), new THREE.MeshStandardMaterial({ color: '#aab9c1', metalness: 0.7, roughness: 0.35 }));
+    thruster.rotation.x = Math.PI / 2;
+    thruster.position.set(side * 0.16, 0, 0.58);
+    ship.add(thruster);
+  }
   return ship;
 }
 

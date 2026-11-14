@@ -1,0 +1,56 @@
+# ORBITAL COMMAND: implementation and outstanding work
+
+This is a code-based status record, not a claim of expert validation. “Partial” means that an initial implementation exists but does not meet the full original brief. Game telemetry and scientific results are simulated unless a NASA source is explicitly identified.
+
+## Foundation and experience
+
+- [x] Existing React, TypeScript, Vite and Three.js application retained; mission progress and reports use local browser storage.
+- [x] Responsive navigation, light/dark themes, larger controls, full-screen visualisations and a visible skippable mission setup guide.
+- [x] Commander transmissions, browser speech synthesis, replay, speech and subtitle controls, and English/Spanish selection for the commander. Browser voice availability varies.
+- [~] Localisation: English is the default and the principal navigation and some screens are bilingual; many mission texts, legacy reports, API responses and controls are not fully translated.
+- [~] 3D solar system, spacecraft variants, procedural surface scenes, orbital visualisations, atmospheric/solar models, lighting, exploration controls and synthetic ambience. They are educational approximations, not AAA-quality models or scientifically complete reconstructions.
+- [~] Accessibility: automated checks cover selected views and combinations. Independent assistive-technology testing, human testing and a full WCAG review remain outstanding.
+- [ ] Original cinematic score, professional recorded voice acting, complete launch and landing cinematics, and final campaign return sequence.
+
+## Campaign and exploration
+
+- [x] Sequential destination unlocking and distinct mission descriptions for Earth, Moon, Mercury, Venus, Mars, Jupiter, Europa, Saturn, Titan, Uranus, Neptune and Sun.
+- [~] Earth observation, lunar and Martian surface activity, rover/walking controls, orbital scanning, samples, simulated lab readings and report transmission exist. Campaign objectives still share simplified mechanics and do not implement every activity in the original request.
+- [~] Planetary lab and probe views provide educational representations; a full continuous, instrumented atmospheric descent and complete internal-layer and solar research gameplay remain outstanding.
+- [x] Restrictions distinguish accessible exploration from remote observation in selected environments; the Sun cannot be entered by a conventional craft in the model.
+- [~] Reports include synthetic readings and sources, and transmitted missions receive a limited debrief. The system does not produce a complete failure report for every failed mission or the full requested end-of-campaign legacy experience.
+
+## Engineering, travel and learning
+
+- [x] Spacecraft, instrument, energy, communications, thermal protection and launcher choices affect simplified mass, cost, power, data, downlink and launch validation.
+- [x] Launchers have different costs, payload limits and starting fuel. Three illustrative orbital profiles affect payload, flight time, generated data and downlink.
+- [x] Guided, standard and challenging settings alter transit reserves and consumption. Failure during transit is possible when power or integrity is exhausted or no required correction can be made; retry and design review are available.
+- [~] Mission difficulty labels are not a complete difficulty model across all exploration mechanics. Failure conditions and consequences are not comprehensive on surfaces or in every mode.
+- [x] Mission transit displays simulated time and resources, includes pause/time acceleration and stops at a required decision. Launch windows are illustrative and are not computed from real ephemerides.
+- [x] Designs can be saved locally, compared and shared as validated JSON for the same mission. No shared online design library exists.
+- [~] Scoring exists but does not yet incorporate every requested measure of scientific value, efficiency and decision quality.
+- [ ] Separate configurable batteries, onboard computing and attitude-control subsystems; full mission-specific orbital coverage and communications simulation; unrestricted sandbox mode.
+
+## NASA data and infrastructure
+
+- [x] NASA/JPL source browser and dated public snapshots; optional EONET event selection provides real-world context for the Earth mission. Game scan indices are clearly identified as simulated.
+- [x] Static Pages builds read a generated snapshot index and only request available published snapshots directly; a local proxy can request supported live data with a private environment key. Secrets are not embedded in the public site.
+- [~] Third-party availability, image delivery, upstream schema changes and API-key quotas can affect data. Snapshots are not live; translated API responses are not currently available.
+- [x] GitHub Pages deployment workflow, pinned actions and Node 24 build. The browser attempts one bounded reload after an obsolete lazy-loaded asset fails following a deployment.
+- [~] The Three.js build produces a large-chunk warning; real-device performance profiling and further bundle optimisation are outstanding.
+
+## Collaboration and impact
+
+- [ ] Accounts, sign-in, authenticated users, online teams, real-time cooperation for up to four people, role assignments, competition, shared leaderboards and server-side synchronisation. Static GitHub Pages does not supply these services.
+- [x] Fictional Dominican tracking context, international collaboration narrative and optional device-local learning assessment with consent, export and deletion.
+- [ ] Independent scientific review, accessibility review by specialists and users, real participant studies and verified reach or impact evidence. Local self-selected assessment results do not establish impact.
+
+## Verification and operations
+
+- Automated unit tests: `npm test`.
+- Production build: `npm run build`.
+- Browser tests in a configured local environment: `npm run test:browser`, `npm run test:engineering`, `npm run test:reliability`, `npm run test:accessibility`, `npm run test:impact`; additional language and guidance scripts are in `tests/`.
+- To test the static build locally, run `VITE_NASA_MODE=snapshot npm run build`, then `npm run preview -- --host 127.0.0.1 --port 4188 --strictPort` in another terminal, followed by `npm run test:reliability`. This test uses the workspace Playwright installation.
+- GitHub Pages: the deployment workflow sets `VITE_NASA_MODE=snapshot`; regular local development defaults to the proxy and falls back to snapshots.
+- A stale browser tab can reference a hashed asset removed by a later deployment. The application reloads once, with a 30-second limit, and the error boundary offers manual reload if recovery cannot complete.
+- Next priorities: secure identity and hosted real-time collaboration; full localisation including source responses; meaningful mission-specific mechanics and failure analysis; expert and user evaluation; device and performance testing.

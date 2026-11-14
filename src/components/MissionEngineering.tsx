@@ -37,7 +37,7 @@ export default function MissionEngineering({ mission, shipId, onCancel, onLaunch
   useEffect(() => {
     if (mission.id !== 'earth') return;
     const controller = new AbortController();
-    loadNASAData('eonet', import.meta.env.BASE_URL, controller.signal).then(result => {
+    loadNASAData('eonet', import.meta.env.BASE_URL, controller.signal, import.meta.env.VITE_NASA_MODE === 'snapshot' ? 'snapshot' : 'proxy').then(result => {
       const found = parseEonetTargets(result); setEvents(found);
       setEventStatus(found.length ? `${found.length} ${t("eventos disponibles", "events available")} · ${result.snapshot ? t("archivo publicado", "published snapshot") : t("consulta del servidor", "server request")} · ${new Date(result.observedAt).toLocaleString(language === "en" ? "en-GB" : "es-DO")}` : t('No hay eventos compatibles en esta respuesta. Puedes continuar con la misión simulada.', 'No compatible events were returned. You may continue with the simulated mission.'));
     }).catch(error => { if (error.name !== 'AbortError') setEventStatus(t('EONET no está disponible. Puedes continuar con la misión simulada.', 'EONET is unavailable. You may continue with the simulated mission.')); });

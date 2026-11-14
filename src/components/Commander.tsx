@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { introduction, missionTransmission, operationsGuide, selectSpanishVoice, englishGuide, englishMissionTransmission, selectEnglishVoice, englishDestinations, translateTransmission, type Language, type Transmission } from '../data/commander';
 import { readStorage, writeStorage } from '../systems/storage';
 import type { Mission } from '../data/missions';
@@ -30,6 +31,8 @@ export default function Commander({ mission, screen, language }: Props) {
   const t = (es: string, en: string) => language === 'es' ? es : en;
   const guideMessages = language === 'en' ? englishGuide : operationsGuide;
   const destination = language === 'en' ? englishDestinations[mission.id] ?? mission.destination : mission.destination;
+  const [rail, setRail] = useState<HTMLElement | null>(null);
+  useEffect(() => { setRail(document.getElementById("commander-rail")); }, []);
   const [settings, setSettings] = useState(loadSettings);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [voiceError, setVoiceError] = useState('');
@@ -176,9 +179,9 @@ export default function Commander({ mission, screen, language }: Props) {
   const end = wordStart === null ? null : highlightedEnd === -1 ? shown.text.length : wordStart + (highlightedEnd ?? 0);
 
   return <>
-    <button className="commander-toggle" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-controls="commander-panel">◉ <span>{t("COMANDANTE", "COMMANDER")}</span></button>
+    {rail && createPortal(<button className="commander-toggle" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-controls="commander-panel" aria-label={t("VOZ · COMANDANTE", "VOICE · COMMANDER")} title={t("Comandante", "Commander")}><span aria-hidden="true">◉</span><small>{t("VOZ", "VOICE")}</small></button>, rail)}
     {(open || guide) && <aside ref={panelRef} id="commander-panel" className={`commander-panel ${guide ? 'commander-panel-guide' : ''}`} role={guide ? 'dialog' : undefined} aria-modal={guide ? true : undefined} aria-label={t("Comunicaciones del comandante", "Commander communications")}>
-      <div className="commander-header"><div><span>{t("CONTROL TERRESTRE · 2042", "MISSION CONTROL · 2042")}</span><strong>{t("COMANDANTE", "COMMANDER")}</strong></div>{!guide && <button onClick={() => { stop(); setOpen(false); }} aria-label={t("Cerrar comunicaciones", "Close communications")}>×</button>}</div>
+      <div className="commander-header"><div><span>{t("CONTROL TERRESTRE · 2042", "MISSION CONTROL · 2042")}</span><strong>{t("COMANDANTE", "COMMANDER")}</strong></div>{!guide && <button onClick={() => { stop(); setOpen(false); }} className="commander-close" aria-label={t("Cerrar comunicaciones", "Close communications")}><span aria-hidden="true">×</span></button>}</div>
       {guide && <div className="commander-progress">{t("GUÍA DE OPERACIONES", "OPERATIONS GUIDE")} · {guideStep + 1} / {guideMessages.length}</div>}
       <h2>{shown.title}</h2>
       {settings.subtitles && <p className="commander-subtitle">{wordStart !== null && end !== null ? <>{shown.text.slice(0, wordStart)}<mark>{shown.text.slice(wordStart, end)}</mark>{shown.text.slice(end)}</> : shown.text}</p>}

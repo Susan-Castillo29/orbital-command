@@ -43,3 +43,12 @@
   .commander-panel-guide { width: calc(100vw - 32px); }
   .commander-caption { left: 60px; right: 12px; bottom: 86px; width: auto; transform: none; font-size: 11px; }
 }
+/* The communications control belongs to the navigation rail, away from the scene. */
+.commander-rail { display:flex; justify-content:center; width:100%; margin:4px 0; }
+.commander-toggle { position:static; width:60px; min-height:52px; padding:6px 3px; display:flex; flex-direction:column; justify-content:center; gap:3px; border-radius:14px; font-size:19px; line-height:1; letter-spacing:0; }
+.commander-toggle small { font-size:9px; letter-spacing:.05em; }
+.commander-panel:not(.commander-panel-guide) { left:84px; right:auto; bottom:48px; border-radius:16px; }
+.commander-header .commander-close { display:grid; place-items:center; flex:0 0 40px; width:40px; height:40px; padding:0; border:1px solid #51869a; border-radius:50%; background:#17364a; color:#eefbff; cursor:pointer; line-height:1; }
+.commander-close span { display:block; font-size:27px; line-height:1; transform:translateY(-1px); }
+.commander-close:hover { background:#27566e; }
+@media(max-width:600px) { .commander-toggle { position:static; width:43px; min-height:44px; font-size:17px; border-radius:12px; } .commander-toggle small { font-size:7px; } .commander-panel:not(.commander-panel-guide) { left:58px; right:8px; bottom:16px; width:auto; max-height:min(75vh,670px); } }

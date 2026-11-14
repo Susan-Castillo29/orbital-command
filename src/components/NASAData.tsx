@@ -16,7 +16,7 @@ export default function NASAData({onExit, language}:{onExit:()=>void; language:"
  const [imageError,setImageError]=useState(false);
  const [selected,setSelected]=useState<string>('apod');const [result,setResult]=useState<NASAResult|null>(null);const [error,setError]=useState('');const [loading,setLoading]=useState(false);const [attempt,setAttempt]=useState(0);
  useEffect(()=>{const controller=new AbortController();setLoading(true);setResult(null);setError('');setImageError(false);
-  loadNASAData(selected, import.meta.env.BASE_URL, controller.signal).then(setResult).catch(err=>{if(err.name!=='AbortError')setError(err.message);}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});return ()=>controller.abort();
+  loadNASAData(selected, import.meta.env.BASE_URL, controller.signal, import.meta.env.VITE_NASA_MODE === 'snapshot' ? 'snapshot' : 'proxy').then(setResult).catch(err=>{if(err.name!=='AbortError')setError(err.message);}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});return ()=>controller.abort();
  },[selected,attempt]);
  const entry=catalog.find(item=>item[0]===selected)!;
  const sample=Array.isArray(result?.data)?result.data[0]:result?.data;const apod=selected==='apod'&&sample&&typeof sample==='object'?sample as Record<string,unknown>:null;

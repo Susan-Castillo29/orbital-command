@@ -80,6 +80,14 @@ function makeShip(shipId: ShipId) {
     strut.position.set(-0.02, 0, side * 0.36);
     ship.add(strut);
   }
+  // Compact instrument detail keeps the navigation model legible at low zoom.
+  const instrument = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.018, 6, 20), gold);
+  instrument.rotation.y = Math.PI / 2;
+  instrument.position.x = 0.37;
+  ship.add(instrument);
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), new THREE.MeshBasicMaterial({ color: 0x7de8ff }));
+  beacon.position.set(-0.38, 0.16, 0);
+  ship.add(beacon);
   return ship;
 }
 

@@ -101,3 +101,11 @@ html[data-theme='dark'],html[data-theme='dark'] body{background:#07111d}
 .app-shell .render-settings{display:flex;align-items:center;gap:6px;font-size:12px}
 .app-shell .render-settings select{min-height:38px;max-width:125px;padding:4px 6px;font-size:13px;border:1px solid;border-radius:4px}
 @media(max-width:720px){.app-shell .render-settings{font-size:11px}.app-shell .render-settings select{max-width:92px;font-size:12px}}
+/* Softer surfaces keep the control-room character while improving hierarchy. */
+.app-shell :is(.mission-card,.systems-card,.briefing-detail-card,.planet-portrait,.nasa-image-card,.report-select) { border-radius:14px; }
+.app-shell :is(.primary-button,.secondary-button,.systems-primary,.systems-secondary,.time-controls button,.rail-button) { border-radius:10px; }
+.app-shell .mission-card { margin-bottom:7px; transition:transform .18s ease,border-color .18s ease,background-color .18s ease; }
+.app-shell .mission-card:hover { transform:translateY(-2px); }
+.app-shell .universe-panel { border-radius:18px; overflow:hidden; }
+.app-shell :is(.systems-card,.briefing-detail-card) { box-shadow:0 12px 32px #00101d12; }
+@media(prefers-reduced-motion:reduce){.app-shell .mission-card{transition:none}.app-shell .mission-card:hover{transform:none}}

@@ -100,11 +100,12 @@ function App() {
           <button className={`rail-button ${screen === 'nasa' ? 'active' : ''}`} onClick={() => setScreen('nasa')} aria-label={t("Datos reales de NASA", "NASA data")} title="Datos reales de NASA"><span>◈</span><small>NASA</small></button>
           <div className="rail-spacer" />
           <button className="rail-button rail-help" aria-label={t("Ayuda", "Help")} title="Ayuda: arrastra para girar, rueda para acercar, clic en un planeta para elegir destino" onClick={() => { setNotice('Consejo: arrastra para girar el sistema, usa la rueda para acercarte y selecciona un planeta con clic.'); window.setTimeout(() => setNotice(''), 5000); }}><span>?</span><small>{t('AYUDA', 'HELP')}</small></button>
+          <div id="commander-rail" className="commander-rail" />
           <div className="rail-avatar">OC</div>
         </aside>
 
         <div id="mission-content" className="mission-content" tabIndex={-1}>
-        <SceneBoundary key={screen}><Suspense fallback={<div className="systems-loading" role="status">{t('CARGANDO SISTEMAS DE MISIÓN…', 'LOADING MISSION SYSTEMS…')}</div>}>
+        <SceneBoundary key={screen} language={language}><Suspense fallback={<div className="systems-loading" role="status">{t('CARGANDO SISTEMAS DE MISIÓN…', 'LOADING MISSION SYSTEMS…')}</div>}>
         {screen === 'home' ? (
           <section className="mission-layout">
             <div className="mission-column">
