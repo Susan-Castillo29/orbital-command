@@ -6,7 +6,7 @@ import type { Mission } from '../data/missions';
 import { playSound, setAmbienceScene, setAmbienceVolume, setEngineVolume, startAmbience, stopAmbience, stopEngine } from '../systems/audio';
 import './commander.css';
 
-type Props = { mission: Mission; screen: 'home' | 'mission' | 'engineering' | 'transit' | 'exploration' | 'reports' | 'nasa'; language: Language };
+type Props = { mission: Mission; screen: 'home' | 'mission' | 'engineering' | 'transit' | 'exploration' | 'reports' | 'nasa' | 'team'; language: Language };
 type Settings = { voice: boolean; subtitles: boolean; effects: boolean; volume: number; voiceURI: string; rate: number };
 const settingsKey = 'orbital-command-commander-settings-v1';
 const guideKey = 'orbital-command-operations-guide-v1';
@@ -50,7 +50,7 @@ export default function Commander({ mission, screen, language }: Props) {
   const previousScreen = useRef(screen);
   const captionTimer = useRef(0);
   const panelRef = useRef<HTMLElement>(null);
-  const guideActive = guideStep >= 0;
+  const guideActive = guideStep >= 0 && screen !== 'team';
   const available = typeof window !== 'undefined' && 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
 
   useEffect(() => {
@@ -134,7 +134,7 @@ export default function Commander({ mission, screen, language }: Props) {
   useEffect(() => {
     if (previousScreen.current === screen) return;
     previousScreen.current = screen;
-    if (screen === 'home' || screen === 'reports' || screen === 'nasa') return;
+    if (screen === 'home' || screen === 'reports' || screen === 'nasa' || screen === 'team') return;
     const spanishTransmission = screen === 'engineering'
       ? { id: 'engineering', title: 'PREPARACIÓN DE SISTEMAS', text: 'Cada instrumento añade masa, consume energía y produce datos. Revisa el lanzador, el presupuesto y el enlace antes de confirmar tu configuración.' }
       : screen === 'transit'
@@ -173,7 +173,7 @@ export default function Commander({ mission, screen, language }: Props) {
     window.dispatchEvent(new Event('orbital-start-visual-guide'));
   }
 
-  const guide = guideStep >= 0 ? guideMessages[guideStep] : null;
+  const guide = guideActive ? guideMessages[guideStep] : null;
   const shown = guide ?? current;
   const highlightedEnd = wordStart === null ? null : shown.text.slice(wordStart).search(/\s/);
   const end = wordStart === null ? null : highlightedEnd === -1 ? shown.text.length : wordStart + (highlightedEnd ?? 0);

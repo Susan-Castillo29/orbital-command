@@ -10,11 +10,11 @@ import { parseDesignSnapshot } from '../systems/designSnapshot';
 import { runMissionExperiment, type ExperimentResult } from '../systems/missionExperiment';
 import './mission-systems.css';
 
-type Props = { mission: Mission; shipId: ShipId; onCancel: () => void; onLaunch: (design: MissionDesign, target: EonetTarget | null) => void; currentTarget: EonetTarget | null; guided: boolean; language: "en" | "es" };
+type Props = { mission: Mission; shipId: ShipId; onCancel: () => void; onLaunch: (design: MissionDesign, target: EonetTarget | null) => void; currentTarget: EonetTarget | null; sharedDesign?: MissionDesign | null; guided: boolean; language: "en" | "es" };
 
-export default function MissionEngineering({ mission, shipId, onCancel, onLaunch, currentTarget, language, guided }: Props) {
+export default function MissionEngineering({ mission, shipId, onCancel, onLaunch, currentTarget, language, guided, sharedDesign }: Props) {
   const t = (es: string, en: string) => language === "es" ? es : en;
-  const [design, setDesign] = useState<MissionDesign>(() => defaultDesign(mission.id, shipId));
+  const [design, setDesign] = useState<MissionDesign>(() => sharedDesign ?? defaultDesign(mission.id, shipId));
   const [savedDesign, setSavedDesign] = useState(() => parseDesignSnapshot(readStorage(`orbital-command-design-v1-${mission.id}`) ?? '', mission.id));
   const [designText, setDesignText] = useState('');
   const [designStatus, setDesignStatus] = useState('');

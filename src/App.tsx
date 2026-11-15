@@ -14,6 +14,7 @@ import type { Mission } from './data/missions';
 import { readStorage, writeStorage } from './systems/storage';
 import { initialPlayerProgress, loadPlayerProgress, type PlayerProgress } from './systems/playerProgress';
 import { playSound } from './systems/audio';
+import { validatePublicConfig } from './collaboration/config';
 import { ships, type ShipId } from './data/ships';
 
 const ExplorationScene = lazy(() => import('./components/ExplorationScene'));
@@ -21,7 +22,9 @@ const MissionEngineering = lazy(() => import('./components/MissionEngineering'))
 const MissionTransit = lazy(() => import('./components/MissionTransit'));
 const MissionReports = lazy(() => import('./components/MissionReports'));
 const NASAData = lazy(() => import('./components/NASAData'));
+const CollaborationHub = lazy(() => import('./components/CollaborationHub'));
 
+const cloudConfigured = Boolean(validatePublicConfig(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY));
 const savedMission = typeof window === 'undefined' ? null : readStorage('orbital-command-mission');
 const savedPlayer = typeof window === 'undefined' ? initialPlayerProgress : loadPlayerProgress();
 const initialMission = missions.find((mission) => mission.id === savedMission && chapterUnlocked(mission.id, savedPlayer.completedMissions)) ?? missions.find((mission) => mission.id === 'earth')!;
@@ -33,8 +36,10 @@ function App() {
   const finishVisualGuide = () => { writeStorage('orbital-command-visual-guide-v1', 'done'); setVisualGuide(null); };
   useEffect(() => { const start = () => { if (readStorage('orbital-command-visual-guide-v1') !== 'done') setVisualGuide('select'); }; window.addEventListener('orbital-start-visual-guide', start); return () => window.removeEventListener('orbital-start-visual-guide', start); }, []);
   const [mission, setMission] = useState<Mission>(initialMission);
-  const [screen, setScreen] = useState<'home' | 'mission' | 'engineering' | 'transit' | 'exploration' | 'reports' | 'nasa'>('home');
+  const [teamVisited, setTeamVisited] = useState(cloudConfigured);
+  const [screen, setScreen] = useState<'home' | 'mission' | 'engineering' | 'transit' | 'exploration' | 'reports' | 'nasa' | 'team'>(cloudConfigured ? 'team' : 'home');
   const [design, setDesign] = useState<MissionDesign>(initialDesign);
+  const [sharedDesign, setSharedDesign] = useState<MissionDesign | null>(null);
   const [scienceTarget, setScienceTarget] = useState<EonetTarget | null>(() => { try { const value: unknown = JSON.parse(readStorage('orbital-command-eonet-target-v1') ?? 'null'); return isEonetTarget(value) ? value : null; } catch { return null; } });
   const [arrival, setArrival] = useState<TransitState | null>(null);
   const [notice, setNotice] = useState('');
@@ -69,7 +74,7 @@ function App() {
 
   const selectMission = (id: string) => {
     const next = missions.find((item) => item.id === id);
-    if (next && chapterUnlocked(next.id, player.completedMissions)) { setMission(next); if (visualGuide === 'select') setVisualGuide('prepare'); playSound('select'); }
+    if (next && chapterUnlocked(next.id, player.completedMissions)) { setMission(next); setSharedDesign(null); if (visualGuide === 'select') setVisualGuide('prepare'); playSound('select'); }
     else if (next) { setNotice('Este capítulo se desbloqueará cuando completes la misión anterior.'); window.setTimeout(() => setNotice(''), 3500); }
   };
 
@@ -100,6 +105,7 @@ function App() {
           <button className={`rail-button ${screen === 'exploration' || screen === 'engineering' || screen === 'transit' ? 'active' : ''}`} onClick={() => setScreen('engineering')} aria-label={t("Explorar · Preparar exploración", "Explore · Prepare exploration")} title="Preparar exploración"><span>✦</span><small>{t('EXPLORAR', 'EXPLORE')}</small></button>
           <button className={`rail-button ${screen === 'reports' ? 'active' : ''}`} onClick={() => setScreen('reports')} aria-label={t("Informes científicos", "Science reports")} title="Informes científicos"><span>▤</span><small>{t('INFORMES', 'REPORTS')}</small></button>
           <button className={`rail-button ${screen === 'nasa' ? 'active' : ''}`} onClick={() => setScreen('nasa')} aria-label={t("Datos reales de NASA", "NASA data")} title="Datos reales de NASA"><span>◈</span><small>NASA</small></button>
+          <button className={`rail-button ${screen === 'team' ? 'active' : ''}`} onClick={() => { setTeamVisited(true); setScreen('team'); }} aria-label={t('Cuentas y equipos', 'Accounts and teams')} title={t('Cuentas y equipos', 'Accounts and teams')}><span>♧</span><small>{t('EQUIPOS', 'TEAMS')}</small></button>
           <div className="rail-spacer" />
           <button className="rail-button rail-help" aria-label={t("Ayuda", "Help")} title="Ayuda: arrastra para girar, rueda para acercar, clic en un planeta para elegir destino" onClick={() => { setNotice('Consejo: arrastra para girar el sistema, usa la rueda para acercarte y selecciona un planeta con clic.'); window.setTimeout(() => setNotice(''), 5000); }}><span>?</span><small>{t('AYUDA', 'HELP')}</small></button>
           <div id="commander-rail" className="commander-rail" />
@@ -165,10 +171,10 @@ function App() {
             </div>
           </section>
         ) : screen === 'engineering' ? (
-          <MissionEngineering guided={visualGuide === "confirm"} language={language} key={mission.id} mission={mission} shipId={shipId} onCancel={() => setScreen('mission')} currentTarget={scienceTarget} onLaunch={(next, target) => { if (visualGuide === "confirm") finishVisualGuide(); setScienceTarget(target); writeStorage('orbital-command-eonet-target-v1', JSON.stringify(target)); setDesign(next); setShipId(next.ship); setArrival(null); setScreen('transit'); }} />
+          <MissionEngineering sharedDesign={sharedDesign} guided={visualGuide === "confirm"} language={language} key={mission.id} mission={mission} shipId={shipId} onCancel={() => setScreen('mission')} currentTarget={scienceTarget} onLaunch={(next, target) => { if (visualGuide === "confirm") finishVisualGuide(); setSharedDesign(null); setScienceTarget(target); writeStorage('orbital-command-eonet-target-v1', JSON.stringify(target)); setDesign(next); setShipId(next.ship); setArrival(null); setScreen('transit'); }} />
         ) : screen === 'transit' ? (
           <MissionTransit language={language} key={mission.id} mission={mission} design={design} onCancel={() => setScreen('engineering')} onArrive={(state) => { setArrival(state); setScreen('exploration'); }} />
-        ) : screen === 'nasa' ? (
+        ) : screen === 'team' ? null : screen === 'nasa' ? (
           <NASAData language={language} onExit={() => setScreen('home')} />
         ) : screen === 'reports' ? (
           <MissionReports language={language} onExit={() => setScreen('home')} />
@@ -176,6 +182,7 @@ function App() {
           <ExplorationScene language={language} mission={mission} onExit={() => setScreen('home')} shipId={shipId} design={design} arrival={arrival} scienceTarget={mission.id === 'earth' ? scienceTarget : null} />
         )}
         </Suspense></SceneBoundary>
+        {teamVisited && <div className="collaboration-container" hidden={screen !== 'team'}><SceneBoundary language={language}><Suspense fallback={<div className="systems-loading" role="status">{t('CARGANDO CUENTAS…', 'LOADING ACCOUNTS…')}</div>}><CollaborationHub language={language} mission={mission} onExit={() => setScreen('home')} onApply={(id, candidate) => { const next = missions.find(item => item.id === id); if (!next || !chapterUnlocked(id, player.completedMissions)) return false; setMission(next); setSharedDesign(candidate); setShipId(candidate.ship); setScreen('engineering'); return true; }} /></Suspense></SceneBoundary></div>}
         </div>
       </div>
       <footer className="statusbar"><span><i className="live-dot" />{t(' SIMULACIÓN LOCAL', ' LOCAL SIMULATION')}</span><span>ORBITAL COMMAND <i>·</i> BUILD 0.1.0</span><span>EDUCATIONAL MODEL <i>·</i> ALL VALUES APPROXIMATE</span></footer>

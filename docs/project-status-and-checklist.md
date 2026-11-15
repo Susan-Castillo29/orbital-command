@@ -42,7 +42,7 @@ This is a code-based status record, not a claim of expert validation. “Partial
 
 ## Collaboration and impact
 
-- [ ] Accounts, sign-in, authenticated users, online teams, real-time cooperation for up to four people, role assignments, competition, shared leaderboards and server-side synchronisation. Static GitHub Pages does not supply these services.
+- [~] Supabase Auth, private campaign backups and four-person teams with roles, shared plans and turn-based campaign exchange are implemented behind configuration. Migration and browser integration require validation against an actual Supabase project. Simultaneous 3D flight, competition and shared leaderboards remain outstanding. See [Supabase setup](supabase-setup.md).
 - [x] Fictional Dominican tracking context, international collaboration narrative and optional device-local learning assessment with consent, export and deletion.
 - [ ] Independent scientific review, accessibility review by specialists and users, real participant studies and verified reach or impact evidence. Local self-selected assessment results do not establish impact.
 

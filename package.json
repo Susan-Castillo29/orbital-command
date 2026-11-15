@@ -23,6 +23,7 @@
     "test:report-language": "node tests/browser-report-language.cjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "three": "^0.177.0"

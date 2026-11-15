@@ -39,6 +39,8 @@ jobs:
       - name: Build site
         env:
           VITE_NASA_MODE: snapshot
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: npm run build
       - name: Test mission systems
         run: npm test
