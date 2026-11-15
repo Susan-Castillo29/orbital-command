@@ -10,7 +10,7 @@
   border-radius: 6px; background: #091724; color: #e0edf2; box-shadow: 0 18px 60px #000a;
 }
 .commander-panel-guide { left: 50%; right: auto; bottom: auto; top: 50%; transform: translate(-50%, -50%); z-index: 100; }
-.commander-caption { position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%); z-index: 69; display: grid; gap: 5px; width: min(620px, calc(100vw - 180px)); padding: 12px 16px; border-left: 2px solid #7be2f3; background: #06121dec; color: #f0f9fc; font-size: 13px; line-height: 1.5; box-shadow: 0 8px 25px #0009; pointer-events: none; }.commander-caption strong { color: #8feaff; font-size: 10px; letter-spacing: .08em; }
+.commander-caption { position: fixed; left: 50%; bottom: 60px; transform: translateX(-50%); z-index: 69; display: grid; gap: 5px; width: min(620px, calc(100vw - 180px)); padding: 12px 16px; border-left: 2px solid #7be2f3; background: #06121dec; color: #f0f9fc; font-size: 13px; line-height: 1.5; box-shadow: 0 8px 25px #0009; grid-template-columns: minmax(0, 1fr) auto; align-items: start; }.commander-caption strong { color: #8feaff; font-size: 10px; letter-spacing: .08em; }
 .commander-scrim { position: fixed; inset: 0; z-index: 90; background: #020912bb; }
 .commander-header { display: flex; justify-content: space-between; align-items: flex-start; }
 .commander-header div { display: grid; gap: 6px; }
@@ -52,3 +52,7 @@
 .commander-close span { display:block; font-size:27px; line-height:1; transform:translateY(-1px); }
 .commander-close:hover { background:#27566e; }
 @media(max-width:600px) { .commander-toggle { position:static; width:43px; min-height:44px; font-size:17px; border-radius:12px; } .commander-toggle small { font-size:7px; } .commander-panel:not(.commander-panel-guide) { left:58px; right:8px; bottom:16px; width:auto; max-height:min(75vh,670px); } }
+
+.commander-caption > div { display: grid; gap: 5px; min-width: 0; }
+.commander-caption-close { min-width: 44px; min-height: 44px; border: 1px solid currentColor; border-radius: 8px; background: transparent; color: inherit; font-size: 24px; line-height: 1; cursor: pointer; }
+.commander-caption-close:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }

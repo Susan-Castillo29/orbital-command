@@ -42,6 +42,7 @@ export default function Commander({ mission, screen, language }: Props) {
   const [history, setHistory] = useState<Transmission[]>(() => [language === 'en' ? englishGuide[0] : introduction]);
   const [speaking, setSpeaking] = useState(false);
   const [captionVisible, setCaptionVisible] = useState(false);
+  const [captionDismissed, setCaptionDismissed] = useState(false);
   const [ambient, setAmbient] = useState(false);
   const [ambientUnavailable, setAmbientUnavailable] = useState(false);
   const [wordStart, setWordStart] = useState<number | null>(null);
@@ -126,6 +127,7 @@ export default function Commander({ mission, screen, language }: Props) {
     if (speak) play(transmission);
   }
   function showCaption() {
+    setCaptionDismissed(false);
     setCaptionVisible(true);
     window.clearTimeout(captionTimer.current);
     captionTimer.current = window.setTimeout(() => setCaptionVisible(false), 8000);
@@ -217,6 +219,6 @@ export default function Commander({ mission, screen, language }: Props) {
       {guide ? <div className="commander-guide-actions"><button onClick={finishGuide}>{t("OMITIR GUÍA", "SKIP GUIDE")}</button><button onClick={() => { stop(); if (guideStep === guideMessages.length - 1) finishGuide(); else { const next = guideMessages[guideStep + 1]; setGuideStep(guideStep + 1); record(next, audioActivated.current && settings.voice); } }}>{guideStep === guideMessages.length - 1 ? t("COMENZAR MISIÓN", "BEGIN MISSION") : t("SIGUIENTE →", "NEXT →")}</button></div> : <details className="commander-history"><summary>{t("REGISTRO DE TRANSMISIONES", "TRANSMISSION LOG")} · {history.length}</summary><ol>{history.map((item, index) => <li key={`${item.id}-${index}`}><button onClick={() => play(item)}>{item.title} <span>↻</span></button></li>)}</ol><button onClick={() => { stop(); writeStorage('orbital-command-visual-guide-v1', 'pending'); setGuideStep(0); }}>{t("REVISAR GUÍA DE OPERACIONES", "REVIEW OPERATIONS GUIDE")}</button></details>}
     </aside>}
     {guide && <div className="commander-scrim" aria-hidden="true" />}
-    {!guide && !open && settings.subtitles && (speaking || captionVisible) && <div className="commander-caption" role="status"><strong>{t("CONTROL TERRESTRE", "MISSION CONTROL")} · {current.title}</strong><span>{current.text}</span></div>}
+    {!guide && !open && settings.subtitles && !captionDismissed && (speaking || captionVisible) && <aside className="commander-caption" aria-label={t("Subtítulos del comandante", "Commander subtitles")}><div role="status"><strong>{t("CONTROL TERRESTRE", "MISSION CONTROL")} · {current.title}</strong><span>{current.text}</span></div><button type="button" className="commander-caption-close" aria-label={t("Cerrar subtítulos actuales", "Dismiss current subtitles")} onClick={() => { window.clearTimeout(captionTimer.current); setCaptionVisible(false); setCaptionDismissed(true); }}><span aria-hidden="true">×</span></button></aside>}
   </>;
 }
