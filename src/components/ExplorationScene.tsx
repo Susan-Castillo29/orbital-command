@@ -669,6 +669,13 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
       window.clearTimeout(toastTimer);
       toastTimer = window.setTimeout(() => setMessage(''), 4300);
     };
+    const applySharedMissionAction = async (type: Parameters<typeof submitLiveAction>[0], payload: Record<string, unknown>) => {
+      const live = liveTeamRef.current;
+      if (!live.connected || live.authoritativeSession?.status !== 'active') return true;
+      if (await submitLiveAction(type, payload)) return true;
+      setMessageForSeconds(getLiveSnapshot().error || 'El equipo no aceptó la acción. Comprueba tu rol, los objetivos y la conexión.');
+      return false;
+    };
     const matchedTarget = () => mission.id === 'earth' && scienceTarget && currentRecordedTarget && scienceTarget.id === currentRecordedTarget.id && scienceTarget.retrievedAt === currentRecordedTarget.retrievedAt ? currentRecordedTarget : null;
     const getRegions = () => { const regions = [...(orbitalRegions[mission.id] ?? ['Sector norte', 'Sector ecuatorial', 'Sector sur'])]; if (mission.id === 'earth' && scienceTarget && (!currentSurvey.scannedRegions.includes(0) || matchedTarget())) regions[0] = `EONET: ${scienceTarget.title}`; return regions; };
     const awardCompletion = () => {
@@ -886,7 +893,7 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
       }
       else viewDistance = THREE.MathUtils.clamp(viewDistance + event.deltaY * 0.008, 3, 16);
     };
-    const interactPoint = (index: number) => {
+    const interactPoint = async (index: number) => {
       if (modeNow !== 'surface') return;
       const point = surface.points[index];
       if (!point) return;
@@ -899,12 +906,12 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
         if (!currentProgress.scannedRocks.includes(point.index)) {
           if (currentResources.energy < 8) { setMessageForSeconds('Energía insuficiente para activar el espectrómetro. Regresa a la estación de recarga.'); return; }
           if (currentResources.storage + 8 > 100) { setMessageForSeconds('Almacenamiento lleno · transmite o revisa los datos antes de escanear más.'); return; }
+          if (!await applySharedMissionAction('scan_sector', { id: `${mission.id}-rock-${point.index}` })) return;
           const scannedRocks = [...currentProgress.scannedRocks, point.index];
           const beacon = point.object.children[0] as THREE.Mesh<THREE.OctahedronGeometry, THREE.MeshStandardMaterial>;
           beacon.material.color.set('#8be6ac');
           beacon.material.emissive.set('#1a7044');
           commitProgress({ scannedRocks }, `${point.name} escaneado · composición mineral registrada (${scannedRocks.length}/3).`);
-          void submitLiveAction('scan_sector', { id: `${mission.id}-rock-${point.index}` });
           commitResources({ energy: currentResources.energy - 8, storage: currentResources.storage + 8 });
       bufferData('observations', 8);
           return;
@@ -915,9 +922,9 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
         }
         if (currentResources.energy < 6) { setMessageForSeconds('Energía insuficiente para el taladro de muestreo.'); return; }
         if (currentResources.storage + 12 > 100) { setMessageForSeconds('No hay espacio en el contenedor de muestras.'); return; }
+        if (!await applySharedMissionAction('collect_sample', { id: `${mission.id}-sample-${point.index}` })) return;
         const collectedSamples = [...currentProgress.collectedSamples, point.index];
         commitProgress({ collectedSamples }, `Muestra de ${point.name} recolectada · ${collectedSamples.length}/3 muestras.`);
-        void submitLiveAction('collect_sample', { id: `${mission.id}-sample-${point.index}` });
         commitResources({ energy: currentResources.energy - 6, storage: currentResources.storage + 12 });
       bufferData('sensors', 12);
         return;
@@ -939,7 +946,7 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
       commitResources({ energy: currentResources.energy - 12, storage: currentResources.storage + 18 });
       bufferData('sensors', 18);
     };
-    const scanOrbitalSector = () => {
+    const scanOrbitalSector = async () => {
       if (modeNow !== 'orbit') return;
       if (mission.id === 'moon') { setMessageForSeconds('LUNAR FRONTIER: usa el rover y escanea las formaciones de la superficie.'); return; }
       if (mission.id === 'earth' && !currentSatelliteDeployed) { setMessageForSeconds('Despliega primero el satélite de observación terrestre.'); return; }
@@ -954,10 +961,10 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
       }
       const regions = getRegions();
       const regionIndex = currentSurvey.scannedRegions.length;
+      if (!await applySharedMissionAction('scan_sector', { id: `${mission.id}-orbit-${regionIndex}` })) return;
       if (mission.id === 'earth' && regionIndex === 0 && scienceTarget) { currentRecordedTarget = scienceTarget; setRecordedTarget(scienceTarget); writeStorage(`orbital-command-eonet-scan-${mission.id}`, JSON.stringify(scienceTarget)); }
       const scannedRegions = [...currentSurvey.scannedRegions, regionIndex];
       commitSurvey({ scannedRegions }, `${mission.destination}: ${regions[regionIndex]} escaneado · ${scannedRegions.length}/3 sectores.`);
-      void submitLiveAction('scan_sector', { id: `${mission.id}-orbit-${regionIndex}` });
       commitResources({ energy: currentResources.energy - scanEnergy, storage: currentResources.storage + scanStorage });
       bufferData('observations', scanStorage);
     };
@@ -1124,21 +1131,21 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
       playSound('launch');
     };
     const onInteractPoi = (event: Event) => interactPoint((event as CustomEvent<number>).detail);
-    const onTransmit = () => {
+    const onTransmit = async () => {
       if (modeNow !== 'surface' || !currentProgress.analyzed) { setMessageForSeconds('Transmisión bloqueada · completa primero el análisis geológico.'); return; }
       if (!stationNearby || activeVehicle().position.distanceTo(surface.points[3].position) > 4.2) { setMessageForSeconds('Acércate a la antena de superficie para establecer el enlace.'); return; }
       if (currentResources.communications < 12 || currentResources.energy < 5) { setMessageForSeconds('Recursos de enlace insuficientes · recarga en la estación antes de transmitir.'); return; }
+      if (!await applySharedMissionAction('transmit', {})) return;
       commitResources({ communications: currentResources.communications - 12, energy: currentResources.energy - 5, storage: 0 });
       commitBuffers(emptyDataBuffers());
       commitProgress({ transmitted: true }, `Enlace confirmado · resultados de superficie de ${mission.destination} recibidos por el centro de control.`);
-      void submitLiveAction('transmit', {});
       awardCompletion();
       tutorialDismissedRef.current = true;
       writeStorage(`orbital-command-tutorial-${mission.id}`, 'done');
       setTutorialDismissed(true);
       setTutorialPointer(null);
     };
-    const onTransmitOrbital = () => {
+    const onTransmitOrbital = async () => {
       if (modeNow !== 'orbit' || selectedNow !== mission.targetBodyId || !currentSurvey.arrived) {
         setMessageForSeconds('Transmisión orbital bloqueada · establece primero órbita en el destino de campaña.');
         return;
@@ -1147,10 +1154,10 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
       if (performance.now() < nextWindowAt) { setMessageForSeconds('Espera la siguiente ventana de comunicación.'); return; }
       if (currentResources.storage * hulls[design.ship].storage / 100 > (radios[design.radio].data * orbitProfiles[design.orbit ?? 'balanced'].downlinkFactor) + 0.0001) { setMessageForSeconds('El paquete supera la capacidad de esta ventana. Transmite paquetes parciales antes del informe final.'); return; }
       if (currentResources.communications < 15 || currentResources.energy < 5) { setMessageForSeconds('Recursos de comunicación insuficientes para el uplink orbital.'); return; }
+      if (!await applySharedMissionAction('transmit', {})) return;
       commitResources({ communications: currentResources.communications - 15, energy: currentResources.energy - 5, storage: 0 });
       commitBuffers(emptyDataBuffers());
       commitSurvey({ transmitted: true }, `Datos de ${mission.destination} recibidos · ${mission.name} completada.`);
-      void submitLiveAction('transmit', {});
       awardCompletion();
     };
     const onSetMode = (event: Event) => setModeNow((event as CustomEvent<Mode>).detail);
