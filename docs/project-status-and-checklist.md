@@ -7,7 +7,7 @@ This is a code-based status record, not a claim of expert validation. “Partial
 - [x] Existing React, TypeScript, Vite and Three.js application retained; mission progress and reports use local browser storage.
 - [x] Responsive navigation, light/dark themes, larger controls, full-screen visualisations and a visible skippable mission setup guide.
 - [x] Commander transmissions, browser speech synthesis, replay, speech and subtitle controls, and English/Spanish selection for the commander. Browser voice availability varies.
-- [~] Localisation: English is the default and the principal navigation and some screens are bilingual; destination briefings, transit controls, planetary-lab layers and known report text are bilingual, but some exploration text, custom historical records, API responses and controls are not fully translated.
+- [~] Localisation: English is the default and the principal navigation and some screens are bilingual; destination briefings, transit controls and planetary-lab layer descriptions are bilingual, but many exploration texts, legacy reports, API responses and controls are not fully translated.
 - [~] 3D solar system, spacecraft variants, procedural surface scenes, orbital visualisations, atmospheric/solar models, lighting, exploration controls and synthetic ambience. They are educational approximations, not AAA-quality models or scientifically complete reconstructions.
 - [~] Accessibility: automated checks cover selected views and combinations. Independent assistive-technology testing, human testing and a full WCAG review remain outstanding.
 - [ ] Original cinematic score, professional recorded voice acting, complete launch and landing cinematics, and final campaign return sequence.
@@ -43,7 +43,7 @@ This is a code-based status record, not a claim of expert validation. “Partial
 
 ## Collaboration and impact
 
-- [~] Supabase Auth, private campaign backups and four-person teams with roles, shared plans and turn-based campaign exchange are implemented behind configuration. Migration and browser integration require validation against an actual Supabase project. Simultaneous 3D flight, competition and shared leaderboards remain outstanding. See [Supabase setup](supabase-setup.md).
+- [ ] Accounts, sign-in, authenticated users, online teams, real-time cooperation for up to four people, role assignments, competition, shared leaderboards and server-side synchronisation. Static GitHub Pages does not supply these services.
 - [x] Fictional Dominican tracking context, international collaboration narrative and optional device-local learning assessment with consent, export and deletion.
 - [ ] Independent scientific review, accessibility review by specialists and users, real participant studies and verified reach or impact evidence. Local self-selected assessment results do not establish impact.
 
@@ -52,6 +52,7 @@ This is a code-based status record, not a claim of expert validation. “Partial
 - Automated unit tests: `npm test`.
 - Production build: `npm run build`.
 - Browser tests in a configured local environment: `npm run test:browser`, `npm run test:campaign`, `npm run test:engineering`, `npm run test:reliability`, `npm run test:accessibility`, `npm run test:impact`; additional language and guidance scripts are in `tests/`.
+- Campaign ceremony browser regression: run `npm run build` before `npm run test:campaign`; Playwright serves the compiled assets directly, so no preview server is needed.
 - To test the static build locally, run `VITE_NASA_MODE=snapshot npm run build`, then `npm run preview -- --host 127.0.0.1 --port 4188 --strictPort` in another terminal, followed by `npm run test:reliability`. This test uses the workspace Playwright installation.
 - GitHub Pages: the deployment workflow sets `VITE_NASA_MODE=snapshot`; regular local development defaults to the proxy and falls back to snapshots.
 - A stale browser tab can reference a hashed asset removed by a later deployment. The application reloads once, with a 30-second limit, and the error boundary offers manual reload if recovery cannot complete.

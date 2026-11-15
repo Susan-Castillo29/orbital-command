@@ -1,4 +1,5 @@
 const path = require('node:path');
+const fs = require('node:fs/promises');
 const assert = require('node:assert/strict');
 const browserTools = path.resolve(__dirname, '../../../../../infraestructura/herramientas-locales/browser');
 process.env.PLAYWRIGHT_BROWSERS_PATH ||= path.join(browserTools, 'browsers');
@@ -18,6 +19,24 @@ function fixtures(omitMission = null) {
 }
 async function makeContext(browser, completed, reports) {
   const context = await browser.newContext({ viewport:{ width:1440, height:1000 } });
+  const origin = new URL(url).origin;
+  const distRoot = path.resolve(__dirname, '../dist');
+  const contentTypes = { '.html':'text/html', '.js':'text/javascript', '.css':'text/css', '.svg':'image/svg+xml', '.json':'application/json', '.png':'image/png', '.jpg':'image/jpeg', '.webp':'image/webp', '.woff2':'font/woff2' };
+  await context.route(`${origin}/**`, async (route) => {
+    const pathname = decodeURIComponent(new URL(route.request().url()).pathname);
+    const relativePath = pathname.replace(/^\/+/, '') || 'index.html';
+    const file = path.resolve(distRoot, relativePath);
+    if (file !== distRoot && !file.startsWith(`${distRoot}${path.sep}`)) {
+      await route.fulfill({ status:403, body:'Forbidden' });
+      return;
+    }
+    try {
+      const body = await fs.readFile(file);
+      await route.fulfill({ status:200, contentType:contentTypes[path.extname(file)] || 'application/octet-stream', body });
+    } catch {
+      await route.fulfill({ status:404, body:'Not found' });
+    }
+  });
   await context.addInitScript(({ completedMissions, missionReports }) => {
     localStorage.setItem('orbital-command-operations-guide-v1','done');
     localStorage.setItem('orbital-command-visual-guide-v1','done');
@@ -37,12 +56,12 @@ async function makeContext(browser, completed, reports) {
     const first = await makeContext(browser,partial,fixtures(lastMission));
     await first.page.getByText('Your next mission').waitFor();
     assert.equal(await first.page.getByRole('heading',{ name:'GALACTIC EXPLORER MEDAL' }).count(),0,'an unfinished campaign must not award the medal');
-    await first.page.evaluate((ids,reports) => {
+    await first.page.evaluate(({ ids, reports }) => {
       const progress={ credits:600, xp:0, completedMissions:ids };
       localStorage.setItem('orbital-command-player',JSON.stringify(progress));
       localStorage.setItem('orbital-command-reports-v1',JSON.stringify(reports));
       window.dispatchEvent(new CustomEvent('orbital-player-progress',{ detail:progress }));
-    },missionIds,fixtures());
+    },{ ids:missionIds, reports:fixtures() });
     await first.page.getByRole('heading',{ name:'GALACTIC EXPLORER MEDAL' }).waitFor();
     assert.match(await first.page.locator('.campaign-command-message p').innerText(),/Comandante, misión cumplida/);
     const archive = await first.page.evaluate(() => JSON.parse(localStorage.getItem('orbital-command-campaign-archive-v1')));
