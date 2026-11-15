@@ -53,7 +53,7 @@ function App() {
   const [mission, setMission] = useState<Mission>(initialMission);
   const liveSession = useLiveSession((value) => value, (left, right) => left.connected === right.connected && left.hostId === right.hostId && left.worldState?.routeUpdatedAt === right.worldState?.routeUpdatedAt);
   const [teamVisited, setTeamVisited] = useState(cloudConfigured);
-  const [screen, setScreen] = useState<AppScreen>(() => routeFromHash()?.screen ?? (cloudConfigured ? 'team' : 'home'));
+  const [screen, setScreen] = useState<AppScreen>(() => routeFromHash()?.screen ?? (['#developers', '#connect'].includes(window.location.hash) ? 'developers' : cloudConfigured ? 'team' : 'home'));
   const [previewId, setPreviewId] = useState(() => routeFromHash()?.previewId ?? '');
   const [design, setDesign] = useState<MissionDesign>(initialDesign);
   const [sharedDesign, setSharedDesign] = useState<MissionDesign | null>(null);
@@ -228,7 +228,7 @@ function App() {
           <button className={`rail-button ${screen === 'reports' ? 'active' : ''}`} onClick={() => setScreen('reports')} aria-label={t("Informes científicos", "Science reports")} title="Informes científicos"><span>▤</span><small>{t('INFORMES', 'REPORTS')}</small></button>
           <button className={`rail-button ${screen === 'nasa' ? 'active' : ''}`} onClick={() => setScreen('nasa')} aria-label={t("Datos reales de NASA", "NASA data")} title="Datos reales de NASA"><span>◈</span><small>NASA</small></button>
           <button className={`rail-button ${screen === 'team' ? 'active' : ''}`} onClick={() => { setTeamVisited(true); setScreen('team'); }} aria-label={t('Cuentas y equipos', 'Accounts and teams')} title={t('Cuentas y equipos', 'Accounts and teams')}><span>♧</span><small>{t('EQUIPOS', 'TEAMS')}</small></button>
-          <button className={`rail-button ${screen === 'developers' || screen === 'preview' ? 'active' : ''}`} onClick={() => setScreen('developers')} aria-label="ORBITAL DEVELOPERS" title="ORBITAL DEVELOPERS"><span>↗</span><small>DEVELOPERS</small></button>
+          <button className={`rail-button ${screen === 'developers' || screen === 'preview' ? 'active' : ''}`} onClick={() => { window.history.replaceState(null, '', '#developers'); setScreen('developers'); }} aria-label="ORBITAL DEVELOPERS" title="ORBITAL DEVELOPERS"><span>↗</span><small>DEVELOPERS</small></button>
           <div className="rail-spacer" />
           <button className="rail-button rail-help" aria-label={t("Ayuda", "Help")} title="Ayuda: arrastra para girar, rueda para acercar, clic en un planeta para elegir destino" onClick={() => { setNotice('Consejo: arrastra para girar el sistema, usa la rueda para acercarte y selecciona un planeta con clic.'); window.setTimeout(() => setNotice(''), 5000); }}><span>?</span><small>{t('AYUDA', 'HELP')}</small></button>
           <div id="commander-rail" className="commander-rail" />
