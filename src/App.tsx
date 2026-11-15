@@ -44,7 +44,7 @@ function App() {
   const finishVisualGuide = () => { writeStorage('orbital-command-visual-guide-v1', 'done'); setVisualGuide(null); };
   useEffect(() => { const start = () => { if (readStorage('orbital-command-visual-guide-v1') !== 'done') setVisualGuide('select'); }; window.addEventListener('orbital-start-visual-guide', start); return () => window.removeEventListener('orbital-start-visual-guide', start); }, []);
   const [mission, setMission] = useState<Mission>(initialMission);
-  const liveSession = useLiveSession((value) => value, (left, right) => left.connected === right.connected && left.worldState?.routeUpdatedAt === right.worldState?.routeUpdatedAt);
+  const liveSession = useLiveSession((value) => value, (left, right) => left.connected === right.connected && left.hostId === right.hostId && left.worldState?.routeUpdatedAt === right.worldState?.routeUpdatedAt);
   const [teamVisited, setTeamVisited] = useState(cloudConfigured);
   const [screen, setScreen] = useState<'home' | 'mission' | 'engineering' | 'transit' | 'exploration' | 'reports' | 'nasa' | 'team' | 'roles' | 'scientist'>(cloudConfigured ? 'team' : 'home');
   const [design, setDesign] = useState<MissionDesign>(initialDesign);
@@ -100,7 +100,13 @@ function App() {
   useEffect(() => {
     if (!liveSession.connected || !['home', 'mission', 'engineering', 'transit', 'exploration'].includes(screen)) return;
     publishLiveWorldState(mission.id, screen as 'home' | 'mission' | 'engineering' | 'transit' | 'exploration', { shipId, design, arrival });
-  }, [liveSession.connected, mission.id, screen, shipId, design, arrival]);
+  }, [liveSession.connected, liveSession.hostId, mission.id, screen, shipId, design, arrival]);
+
+  useEffect(() => {
+    const returnToTeam = () => { setTeamVisited(true); setScreen('team'); };
+    window.addEventListener('orbital-return-team', returnToTeam);
+    return () => window.removeEventListener('orbital-return-team', returnToTeam);
+  }, []);
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'auto' }); }, [screen]);
   useEffect(() => { document.documentElement.lang = language === 'en' ? 'en-GB' : 'es'; writeStorage('orbital-command-language', language); }, [language]);
@@ -305,4 +311,3 @@ function App() {
 }
 
 export default App;
-

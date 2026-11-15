@@ -10,22 +10,24 @@ export type LiveActivity = 'idle' | 'walk' | 'run' | 'interact' | 'aboard';
 export type LivePose = { x: number; y: number; z: number; yaw: number; activity: LiveActivity; mode: 'system' | 'flight' | 'orbit' | 'surface' };
 export type LiveMissionStatus = { missionId: string; objective: string; progress: number; location: string; fuel: number; energy: number; integrity: number; updatedAt: number };
 export type LiveWorldState = { missionId: string; screen: 'home' | 'mission' | 'engineering' | 'transit' | 'exploration'; updatedAt: number; routeUpdatedAt: number; launchId?: string; launchAt?: number; shipId?: ShipId; design?: MissionDesign | null; arrival?: TransitState | null; transitState?: TransitState | null; transitStarted?: boolean; transitRate?: number };
-export type LivePlayer = { userId: string; displayName: string; role: string; isHost: boolean; ready: boolean; pose: LivePose; missionStatus: LiveMissionStatus | null; worldState: LiveWorldState | null };
+export type LivePlayer = { userId: string; displayName: string; role: string; isHost: boolean; connected: boolean; ready: boolean; pose: LivePose; missionStatus: LiveMissionStatus | null; worldState: LiveWorldState | null };
 export type LiveMessage = { id: string; userId: string; displayName: string; role: string; text: string; sentAt: number };
-export type LiveSnapshot = { connected: boolean; teamId: string | null; selfId: string | null; hostId: string | null; players: LivePlayer[]; worldState: LiveWorldState | null; messages: LiveMessage[]; error: string };
+export type AuthoritativeSession = { team_id: string; mission_id: string; status: 'lobby' | 'active' | 'completed'; host_user_id: string; revision: number; state: Record<string, unknown>; started_at: string | null; completed_at: string | null; updated_at: string };
+export type LiveSnapshot = { connected: boolean; teamId: string | null; selfId: string | null; hostId: string | null; players: LivePlayer[]; worldState: LiveWorldState | null; authoritativeSession: AuthoritativeSession | null; messages: LiveMessage[]; error: string };
 
 const initialPose: LivePose = { x: 0, y: 0, z: 0, yaw: 0, activity: 'idle', mode: 'system' };
-const empty: LiveSnapshot = { connected: false, teamId: null, selfId: null, hostId: null, players: [], worldState: null, messages: [], error: '' };
+const empty: LiveSnapshot = { connected: false, teamId: null, selfId: null, hostId: null, players: [], worldState: null, authoritativeSession: null, messages: [], error: '' };
 let snapshot = empty;
 let channel: RealtimeChannel | null = null;
 let connectionGeneration = 0;
-let identity: Omit<LivePlayer, 'pose' | 'worldState' | 'ready' | 'missionStatus'> | null = null;
+let identity: Omit<LivePlayer, 'pose' | 'worldState' | 'ready' | 'missionStatus' | 'connected'> | null = null;
 let pose: LivePose = initialPose;
 let ready = false;
 let missionStatus: LiveMissionStatus | null = null;
 let worldState: LiveWorldState | null = null;
 let lastPoseSent = 0;
 let lastChatSent = 0;
+let heartbeatTimer = 0;
 const listeners = new Set<() => void>();
 const missionIds = new Set(['earth', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'europa', 'saturn', 'titan', 'uranus', 'neptune', 'sun', 'asteroid']);
 const screens = new Set(['home', 'mission', 'engineering', 'transit', 'exploration']);
@@ -103,7 +105,7 @@ function membersFromPresence() {
   for (const values of Object.values(state)) {
     const meta = values[values.length - 1] as Record<string, unknown> | undefined;
     if (!meta || typeof meta.userId !== 'string' || typeof meta.displayName !== 'string' || typeof meta.role !== 'string' || typeof meta.isHost !== 'boolean' || !validPose(meta.pose)) continue;
-    players.push({ userId: meta.userId, displayName: meta.displayName.slice(0, 48), role: meta.role, isHost: meta.isHost, ready: meta.ready === true, pose: meta.pose, missionStatus: validMissionStatus(meta.missionStatus) ? meta.missionStatus : null, worldState: validWorld(meta.worldState) ? meta.worldState : null });
+    players.push({ userId: meta.userId, displayName: meta.displayName.slice(0, 48), role: meta.role, isHost: meta.isHost, connected: true, ready: meta.ready === true, pose: meta.pose, missionStatus: validMissionStatus(meta.missionStatus) ? meta.missionStatus : null, worldState: validWorld(meta.worldState) ? meta.worldState : null });
   }
   const hostState = players.find((player) => player.isHost)?.worldState ?? null;
   return { players: players.slice(0, 4), hostState };
@@ -115,8 +117,29 @@ async function trackPresence() {
   if (result !== 'ok' && snapshot.connected) publish({ ...snapshot, error: 'Realtime presence could not be updated.' });
 }
 
+async function heartbeat(teamId: string, generation: number) {
+  if (!cloudClient || !identity || generation !== connectionGeneration) return;
+  const { data, error } = await cloudClient.rpc('orbital_team_heartbeat', { target_team: teamId, is_ready: ready, player_pose: pose });
+  if (generation !== connectionGeneration || !channel) return;
+  if (error) { publish({ ...snapshot, error: error.message }); return; }
+  const result = data as { session?: AuthoritativeSession; players?: Array<{ user_id: string; ready: boolean; connected: boolean; pose: LivePose; role: string }> } | null;
+  const session = result?.session;
+  if (!session || !['lobby', 'active', 'completed'].includes(session.status)) return;
+  const hostChanged = snapshot.hostId !== session.host_user_id;
+  if (identity) identity.isHost = identity.userId === session.host_user_id;
+  if (session.status !== 'lobby' && !worldState) {
+    const restoredAt = Date.parse(session.updated_at) || Date.now();
+    worldState = { missionId: session.mission_id, screen: 'exploration', updatedAt: restoredAt, routeUpdatedAt: restoredAt };
+  }
+  const latest: LivePlayer[] = (result?.players ?? []).map((player) => ({ userId: player.user_id, displayName: player.user_id === identity?.userId ? identity.displayName : (snapshot.players.find((candidate) => candidate.userId === player.user_id)?.displayName ?? player.user_id.slice(0, 8)), role: player.role, isHost: player.user_id === session.host_user_id, connected: player.connected, ready: player.ready, pose: player.pose, missionStatus: snapshot.players.find((candidate) => candidate.userId === player.user_id)?.missionStatus ?? null, worldState: snapshot.players.find((candidate) => candidate.userId === player.user_id)?.worldState ?? null }));
+  publish({ ...snapshot, hostId: session.host_user_id, authoritativeSession: session, players: latest.slice(0, 4), worldState, error: '' });
+  if (hostChanged) void trackPresence();
+}
+
 export async function connectLiveTeam(input: { teamId: string; userId: string; displayName: string; role: string; hostId: string }) {
   const generation = ++connectionGeneration;
+  if (heartbeatTimer) window.clearInterval(heartbeatTimer);
+  heartbeatTimer = 0;
   const previous = channel;
   channel = null;
   identity = null;
@@ -137,11 +160,16 @@ export async function connectLiveTeam(input: { teamId: string; userId: string; d
     if (latest.hostState && (!worldState || latest.hostState.updatedAt >= worldState.updatedAt)) worldState = latest.hostState;
     publish({ ...snapshot, players: latest.players, worldState });
   });
+  next.on('postgres_changes', { event: '*', schema: 'public', table: 'orbital_team_sessions', filter: `team_id=eq.${input.teamId}` }, (event) => {
+    const row = event.new as AuthoritativeSession | undefined;
+    if (!row || !['lobby', 'active', 'completed'].includes(row.status)) return;
+    publish({ ...snapshot, hostId: row.host_user_id, authoritativeSession: row });
+  });
   next.on('broadcast', { event: 'world-state' }, ({ payload }) => {
     const candidate = (payload as { state?: unknown } | null)?.state;
     if (!validWorld(candidate)) return;
     const from = (payload as { senderId?: unknown } | null)?.senderId;
-    if (from !== input.hostId) return;
+    if (from !== snapshot.hostId) return;
     worldState = candidate;
     publish({ ...snapshot, worldState });
     void trackPresence();
@@ -158,6 +186,8 @@ export async function connectLiveTeam(input: { teamId: string; userId: string; d
     if (status === 'SUBSCRIBED') {
       publish({ ...snapshot, connected: true, error: '' });
       void trackPresence();
+      void heartbeat(input.teamId, generation);
+      heartbeatTimer = window.setInterval(() => { void heartbeat(input.teamId, generation); }, 2500);
     } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
       publish({ ...snapshot, connected: false, error: error?.message ?? `Realtime ${status.toLowerCase()}.` });
     }
@@ -172,6 +202,8 @@ export async function disconnectLiveTeam() {
   ready = false;
   missionStatus = null;
   worldState = null;
+  if (heartbeatTimer) window.clearInterval(heartbeatTimer);
+  heartbeatTimer = 0;
   if (previous && cloudClient) await cloudClient.removeChannel(previous);
   publish(empty);
 }
@@ -190,29 +222,51 @@ export function setLiveReady(next: boolean) {
   ready = next;
   lastPoseSent = 0;
   void trackPresence();
+  if (snapshot.teamId) void heartbeat(snapshot.teamId, connectionGeneration);
 }
 
 let lastMissionStatusSent = 0;
 export function setLiveMissionStatus(next: Omit<LiveMissionStatus, 'updatedAt'>) {
   if (!channel || !identity || !missionIds.has(next.missionId)) return;
   missionStatus = { missionId: next.missionId, objective: next.objective.slice(0, 180), progress: Math.max(0, Math.min(100, next.progress)), location: next.location.slice(0, 60), fuel: Math.max(0, Math.min(100, next.fuel)), energy: Math.max(0, Math.min(100, next.energy)), integrity: Math.max(0, Math.min(100, next.integrity)), updatedAt: Date.now() };
-  if (Date.now() - lastMissionStatusSent < 900) return;
+  if (Date.now() - lastMissionStatusSent < 2500) return;
   lastMissionStatusSent = Date.now();
   void trackPresence();
+  if (identity.isHost && snapshot.teamId && snapshot.authoritativeSession?.status === 'active' && cloudClient) {
+    void cloudClient.rpc('orbital_report_team_telemetry', { target_team: snapshot.teamId, target_mission: next.missionId, fuel: missionStatus.fuel, energy: missionStatus.energy, integrity: missionStatus.integrity, objective: missionStatus.objective, progress: missionStatus.progress, location: missionStatus.location }).then(({ data, error }) => {
+      if (error) { publish({ ...snapshot, error: error.message }); return; }
+      const result = data as { session?: AuthoritativeSession } | null;
+      if (result?.session) publish({ ...snapshot, authoritativeSession: result.session, error: '' });
+    });
+  }
 }
 
-export function startLiveMission(missionId: string, expectedMemberIds: string[], options: { shipId?: ShipId; design?: MissionDesign | null } = {}) {
+export async function startLiveMission(missionId: string, expectedMemberIds: string[], options: { shipId?: ShipId; design?: MissionDesign | null } = {}) {
   const required = [...new Set(expectedMemberIds)];
   const players = snapshot.players;
   const roles = new Set(['planning', 'engineering', 'science', 'communications']);
-  if (!channel || !identity?.isHost || !snapshot.connected || !missionIds.has(missionId) || required.length < 1 || required.length > 4) return false;
+  if (!channel || !cloudClient || !identity || identity.userId !== snapshot.hostId || !snapshot.connected || !missionIds.has(missionId) || required.length < 1 || required.length > 4) return false;
   if (required.length !== players.length || required.some((id) => !players.some((player) => player.userId === id && player.ready && roles.has(player.role)))) return false;
+  const { data, error } = await cloudClient.rpc('orbital_start_team_mission', { target_team: snapshot.teamId, target_mission: missionId });
+  if (error) { publish({ ...snapshot, error: error.message }); return false; }
+  const serverSession = data as AuthoritativeSession;
+  if (!serverSession || serverSession.status !== 'active' || serverSession.host_user_id !== identity.userId) return false;
   const now = Date.now();
   worldState = { missionId, screen: 'exploration', updatedAt: now, routeUpdatedAt: now, launchId: crypto.randomUUID(), launchAt: now + 2400, shipId: options.shipId, design: options.design ?? null, arrival: null, transitState: null, transitStarted: false, transitRate: 0 };
   publish({ ...snapshot, worldState });
   void trackPresence();
+  publish({ ...snapshot, authoritativeSession: serverSession, error: '' });
   void channel.send({ type: 'broadcast', event: 'world-state', payload: { senderId: identity.userId, state: worldState } });
   return true;
+}
+
+export async function submitLiveAction(actionType: 'set_route' | 'repair_system' | 'collect_sample' | 'scan_sector' | 'transmit' | 'interact', payload: Record<string, unknown>) {
+  if (!cloudClient || !snapshot.teamId || !snapshot.connected) return false;
+  const { data, error } = await cloudClient.rpc('orbital_submit_team_action', { target_team: snapshot.teamId, p_action_id: crypto.randomUUID(), action_type: actionType, action_payload: payload });
+  if (error) { publish({ ...snapshot, error: error.message }); return false; }
+  const result = data as { session?: AuthoritativeSession } | null;
+  if (result?.session) publish({ ...snapshot, authoritativeSession: result.session, error: '' });
+  return Boolean(result?.session);
 }
 
 export function publishLiveWorldState(missionId: string, screen: LiveWorldState['screen'], options: { shipId?: ShipId; design?: MissionDesign | null; arrival?: TransitState | null } = {}) {
@@ -240,4 +294,3 @@ export function sendLiveMessage(text: string) {
   void channel.send({ type: 'broadcast', event: 'team-chat', payload: message });
   return true;
 }
-

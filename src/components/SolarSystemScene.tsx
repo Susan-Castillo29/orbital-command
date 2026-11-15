@@ -8,7 +8,7 @@ import { localiseMission } from '../data/missionLocale';
 import { celestialBodies } from '../data/celestialBodies';
 import type { ShipId } from '../data/ships';
 import { loadPlanetTexture } from '../systems/planetTextures';
-import { getLiveSnapshot, setLivePose, subscribeLiveSnapshot, type LiveActivity, type LivePlayer, type LivePose } from '../collaboration/liveSession';
+import { getLiveSnapshot, setLivePose, submitLiveAction, subscribeLiveSnapshot, type LiveActivity, type LivePlayer, type LivePose } from '../collaboration/liveSession';
 
 type Props = {
   mission: Mission;
@@ -293,14 +293,14 @@ export default function SolarSystemScene({ mission, onSelect, shipId, language }
       if (!getLiveSnapshot().connected || ignoreTyping(event.target)) return;
       const key = event.key.toLowerCase();
       if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(key)) { pressed.add(key); event.preventDefault(); }
-      if (key === 'e' && !event.repeat) { aboard = !aboard; event.preventDefault(); }
-      if (key === 'f' && !event.repeat) { interactionUntil = performance.now() + 900; event.preventDefault(); }
+      if (key === 'e' && !event.repeat) { aboard = !aboard; void submitLiveAction('interact', { id: aboard ? 'boarding-ramp' : 'ship-interior' }); event.preventDefault(); }
+      if (key === 'f' && !event.repeat) { interactionUntil = performance.now() + 900; void submitLiveAction('interact', { id: 'universe-interaction' }); event.preventDefault(); }
     };
     const onLiveKeyUp = (event: KeyboardEvent) => { pressed.delete(event.key.toLowerCase()); };
     const onLiveBlur = () => pressed.clear();
     const refreshLivePlayers = () => {
       const live = getLiveSnapshot();
-      livePlayers = live.players; selfId = live.selfId;
+      livePlayers = live.players.filter((player) => player.connected); selfId = live.selfId;
       teamDock.visible = live.connected;
       for (const player of livePlayers) {
         if (player.userId === selfId) localPose = { ...player.pose };
@@ -465,4 +465,3 @@ export default function SolarSystemScene({ mission, onSelect, shipId, language }
     </div>
   );
 }
-
