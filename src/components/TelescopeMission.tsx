@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from
 import { telescopeBands, telescopeInstruments, telescopeLevels, telescopeObjectives, telescopeOptics, type SpectralBandId, type TelescopeInstrumentId, type TelescopeLevelId } from '../data/telescopeProgram';
 import { readStorage, writeStorage } from '../systems/storage';
 import { allowedBands, allowedInstruments, evaluateTelescopeDesign, initialTelescopeDesign, normalizeTelescopeDesign, scienceArchiveKey, simulatedSpectrum, telescopeStorageKey, validTelescopeDesign, type TelescopeDesign } from '../systems/telescopeDesign';
+import TelescopeLaunchCinematic from './TelescopeLaunchCinematic';
 import './telescope-mode.css';
 
 type Step = 'briefing'|'objectives'|'spectrum'|'instruments'|'optics'|'review'|'launch'|'results';
@@ -11,7 +12,7 @@ type SavedMode = { design?:unknown; step?:Step; introSeen?:boolean; lastResult?:
 
 const stepIds:Step[]=['briefing','objectives','spectrum','instruments','optics','review','launch','results'];
 const stages:Step[]=['objectives','spectrum','instruments','optics','review','launch','results'];
-const launchStages=[['Verificación de sistemas','Systems check'],['Cuenta regresiva','Countdown'],['Ascenso del lanzador','Launch vehicle ascent'],['Separación de etapas','Stage separation'],['Despliegue del observatorio','Observatory deployment'],['Activación de instrumentos','Instrument activation'],['Primera luz simulada','Simulated first light']];
+const launchStages=[['Observatorio en ensamblaje','Observatory in final assembly'],['Cuenta regresiva','Countdown'],['Ascenso nominal','Nominal ascent'],['Inserción y despliegue orbital','Orbital insertion and deployment'],['Primera luz','First light'],['Misión desplegada','Mission deployed']];
 
 function loadSaved():SavedMode {
   try { const parsed:unknown=JSON.parse(readStorage(telescopeStorageKey)??'{}'); return parsed&&typeof parsed==='object'?parsed as SavedMode:{}; } catch { return {}; }
@@ -40,23 +41,15 @@ export default function TelescopeMission({language,onExit}:Props){
   const availablePayload=allowedInstruments(design);
 
   useEffect(()=>{ writeStorage(telescopeStorageKey,JSON.stringify({design,step,introSeen,lastResult} satisfies SavedMode)); },[design,step,introSeen,lastResult]);
-  useEffect(()=>{
-    if(!launchActive)return;
-    if(launchIndex>=launchStages.length-1){
-      const timer=window.setTimeout(()=>{
-        const result:MissionRecord={id:globalThis.crypto?.randomUUID?.()??`science-${Date.now()}`,completedAt:new Date().toISOString(),level:design.level,objectiveIds:[...design.objectiveIds],bands:[...design.bands],instrumentIds:[...design.instrumentIds],score:assessment.score,massKg:assessment.massKg,powerW:assessment.powerW,cost:assessment.cost,dataRetainedGb:assessment.dataRetainedGb,dataGeneratedGb:assessment.dataGeneratedGb};
-        const next=loadArchive();
-        next.missions=[...next.missions,result].slice(-50);
-        const newMedals=['first-light',...(assessment.score>=85?['balanced-systems']:[]),...(new Set(design.bands).size===5?['full-spectrum']:[])];
-        next.medals=[...new Set([...next.medals,...newMedals])];
-        writeStorage(scienceArchiveKey,JSON.stringify(next));
-        setArchive(next);setLastResult(result);setLaunchActive(false);setStep('results');
-      },900);
-      return()=>window.clearTimeout(timer);
-    }
-    const timer=window.setTimeout(()=>setLaunchIndex((index)=>index+1),850);
-    return()=>window.clearTimeout(timer);
-  },[launchActive,launchIndex,design,assessment]);
+  const finishLaunch=()=>{
+    const result:MissionRecord={id:globalThis.crypto?.randomUUID?.()??`science-${Date.now()}`,completedAt:new Date().toISOString(),level:design.level,objectiveIds:[...design.objectiveIds],bands:[...design.bands],instrumentIds:[...design.instrumentIds],score:assessment.score,massKg:assessment.massKg,powerW:assessment.powerW,cost:assessment.cost,dataRetainedGb:assessment.dataRetainedGb,dataGeneratedGb:assessment.dataGeneratedGb};
+    const next=loadArchive();
+    next.missions=[...next.missions,result].slice(-50);
+    const newMedals=['first-light',...(assessment.score>=85?['balanced-systems']:[]),...(new Set(design.bands).size===5?['full-spectrum']:[])];
+    next.medals=[...new Set([...next.medals,...newMedals])];
+    writeStorage(scienceArchiveKey,JSON.stringify(next));
+    setArchive(next);setLastResult(result);setLaunchActive(false);setStep('results');
+  };
 
   const updateDesign=(next:TelescopeDesign)=>setDesign(normalizeTelescopeDesign(next));
   const toggleGoal=(id:string)=>{
@@ -151,7 +144,7 @@ export default function TelescopeMission({language,onExit}:Props){
           <StageActions back={()=>setStep('optics')} backLabel={t('ATRÁS','BACK')} next={startLaunch} nextLabel={t('INICIAR SECUENCIA DE LANZAMIENTO','BEGIN LAUNCH SEQUENCE')} disabled={assessment.errors.length>0}/>
         </>}
 
-        {step==='launch'&&<div className="launch-screen"><StageHeader kicker={t('SECUENCIA DE LANZAMIENTO','LAUNCH SEQUENCE')} title={t('ORBITAL SCIENCE · PRIMERA LUZ','ORBITAL SCIENCE · FIRST LIGHT')} intro={t('El lanzamiento está habilitado porque la carga cumple los límites configurados para este nivel.','Launch is enabled because the payload meets this level’s configured limits.')} instruction={t('Secuencia animada educativa. El vehículo, el despliegue y los datos no representan una misión real.','Educational animation. The vehicle, deployment and data do not represent a real mission.')} /><div className={`launch-animation ${launchActive?'running':''}`}><div className="launch-stars"/><div className="launch-earth"/><div className="launch-vehicle">△<i/></div><div className="launch-orbit-ring"/><div className="launch-observatory">◈</div><div className="launch-status"><span>{String(launchIndex+1).padStart(2,'0')} / {String(launchStages.length).padStart(2,'0')}</span><b>{t(launchStages[launchIndex][0],launchStages[launchIndex][1])}</b><div><i style={{width:`${((launchIndex+1)/launchStages.length)*100}%`}}/></div></div></div>{!launchActive?<button type="button" className="telescope-primary launch-start" onClick={startLaunch}>{t('INICIAR CUENTA REGRESIVA','START COUNTDOWN')} <b>▶</b></button>:<p className="launch-live" role="status">{t('TELEMETRÍA SIMULADA · SECUENCIA EN CURSO','SIMULATED TELEMETRY · SEQUENCE IN PROGRESS')}</p>}</div>}
+        {step==='launch'&&<div className="launch-screen"><StageHeader kicker={t('SECUENCIA DE LANZAMIENTO','LAUNCH SEQUENCE')} title={t('ORBITAL SCIENCE · PRIMERA LUZ','ORBITAL SCIENCE · FIRST LIGHT')} intro={t('El telescopio configurado está listo para su vuelo de calificación. Su diseño permanece visible desde el ensamblaje hasta el despliegue orbital.','Your configured telescope is ready for its qualification flight. Its design remains visible from assembly through orbital deployment.')} instruction={t('Cinemática 3D educativa de 20 segundos. Las escenas y observaciones son una simulación, no datos de una misión real.','20-second educational 3D cinematic. The scenes and observations are a simulation, not data from a real mission.')} /><TelescopeLaunchCinematic design={design} language={language} active={launchActive} onStart={startLaunch} onComplete={finishLaunch} onStageChange={setLaunchIndex}/><p className="launch-live" role="status">{t(launchStages[Math.min(launchIndex,launchStages.length-1)][0],launchStages[Math.min(launchIndex,launchStages.length-1)][1])} · {t('SECUENCIA EDUCATIVA SIMULADA','SIMULATED EDUCATIONAL SEQUENCE')}</p></div>}
 
         {step==='results'&&<>
           <StageHeader kicker={t('ETAPA 06 · OPERACIONES CIENTÍFICAS','STAGE 06 · SCIENCE OPERATIONS')} title={t('El observatorio inició sus observaciones','The observatory has begun observing')} intro={t('Los siguientes gráficos son resultados sintéticos derivados de tus bandas e instrumentos, no imágenes astronómicas auténticas ni datos de NASA.','These are synthetic results derived from your selected bands and instruments, not authentic astronomical images or NASA data.')} instruction={t('Compara qué clase de evidencia aportó cada decisión de diseño.','Compare the kind of evidence each design decision produced.')} />

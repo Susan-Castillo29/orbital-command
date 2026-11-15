@@ -10,7 +10,7 @@ This is a code-based status record, not a claim of expert validation. “Partial
 - [~] Localisation: English is the default and the principal navigation and some screens are bilingual; destination briefings, transit controls and planetary-lab layer descriptions are bilingual, but many exploration texts, legacy reports, API responses and controls are not fully translated.
 - [~] 3D solar system, spacecraft variants, procedural surface scenes, orbital visualisations, atmospheric/solar models, lighting, exploration controls and synthetic ambience. They are educational approximations, not AAA-quality models or scientifically complete reconstructions.
 - [~] Accessibility: automated checks cover selected views and combinations. Independent assistive-technology testing, human testing and a full WCAG review remain outstanding.
-- [ ] Original cinematic score, professional recorded voice acting, complete launch and landing cinematics, and final campaign return sequence.
+- [~] Telescope design now has a 20-second procedural Three.js launch cinematic with design-specific optics, instruments, power and thermal hardware, synthesized countdown/engine audio, orbital deployment and first-light title. Other campaign launch/landing cinematics, final return sequence, recorded voice acting and an original cinematic score remain outstanding; this scene is not photorealistic production footage.
 
 ## Campaign and exploration
 
@@ -53,7 +53,7 @@ This is a code-based status record, not a claim of expert validation. “Partial
 - Production build: `npm run build`.
 - Browser tests in a configured local environment: `npm run test:browser`, `npm run test:campaign`, `npm run test:telescope`, `npm run test:engineering`, `npm run test:reliability`, `npm run test:accessibility`, `npm run test:impact`; additional language and guidance scripts are in `tests/`.
 - Campaign ceremony browser regression: run `npm run build` before `npm run test:campaign`; Playwright serves the compiled assets directly, so no preview server is needed.
-- Telescope role browser regression: run `npm run build` before `npm run test:telescope`; it verifies astronaut progress isolation, gamma detector compatibility and the simulated launch flow.
+- Telescope role browser regression: run `npm run build` before `npm run test:telescope`; it verifies astronaut progress isolation, gamma detector compatibility and the simulated telescope launch flow. The 3D cinematic requires a WebGL-capable browser and was build-verified, not visually reviewed on a physical device.
 - To test the static build locally, run `VITE_NASA_MODE=snapshot npm run build`, then `npm run preview -- --host 127.0.0.1 --port 4188 --strictPort` in another terminal, followed by `npm run test:reliability`. This test uses the workspace Playwright installation.
 - GitHub Pages: the deployment workflow sets `VITE_NASA_MODE=snapshot`; regular local development defaults to the proxy and falls back to snapshots.
 - A stale browser tab can reference a hashed asset removed by a later deployment. The application reloads once, with a 30-second limit, and the error boundary offers manual reload if recovery cannot complete.
