@@ -80,7 +80,7 @@ function validWorld(value: unknown): value is LiveWorldState {
 }
 
 function membersFromPresence() {
-  if (!channel) return [] as LivePlayer[];
+  if (!channel) return { players: [] as LivePlayer[], hostState: null as LiveWorldState | null };
   const state = channel.presenceState<Record<string, unknown>>();
   const players: LivePlayer[] = [];
   for (const values of Object.values(state)) {
