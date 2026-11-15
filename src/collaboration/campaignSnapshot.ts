@@ -1,4 +1,4 @@
-const fixed = new Set(['orbital-command-player','orbital-command-mission','orbital-command-ship','orbital-command-reports-v1','orbital-command-failed-attempts-v1','orbital-command-report-transmissions-v1','orbital-command-eonet-target-v1','orbital-command-satellite-earth','orbital-command-first-look-v1']);
+const fixed = new Set(['orbital-command-player','orbital-command-mission','orbital-command-ship','orbital-command-reports-v1','orbital-command-failed-attempts-v1','orbital-command-report-transmissions-v1','orbital-command-eonet-target-v1','orbital-command-satellite-earth','orbital-command-first-look-v1','orbital-command-active-campaign-v1','orbital-command-campaign-archive-v1']);
 const perMission = /^orbital-command-(?:progress|resources|survey|buffers|events|lab|photos|sensors|tutorial|eonet-scan|transit-v1|design-v1)-(?:earth|moon|mercury|venus|mars|jupiter|europa|saturn|titan|uranus|neptune|sun|asteroid)$/;
 export type CampaignSnapshot = { version: 1; items: Record<string, string> };
 export function validCampaignKey(key: string): boolean { return fixed.has(key) || perMission.test(key); }

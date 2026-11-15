@@ -1,4 +1,4 @@
-import { readStorage, writeStorage } from './storage.ts';
+import { readStorage, removeStorage, writeStorage } from './storage.ts';
 import type { MissionDesign } from './engineering.ts';
 import type { TransitState } from './transit.ts';
 
@@ -35,6 +35,10 @@ export function saveFailedAttempt(attempt: FailedAttempt): boolean {
   const saved = writeStorage(KEY, JSON.stringify([...next].reverse()));
   volatileAttempts = saved ? null : next;
   return saved;
+}
+export function clearFailedAttempts(): void {
+  volatileAttempts = [];
+  removeStorage(KEY);
 }
 export function makeFailedAttempt(id: string, mission: { id: string; name: string; destination: string }, design: MissionDesign, state: TransitState, reason: FailedAttempt['reason'], phase: 'transit' | 'exploration' = 'transit'): FailedAttempt {
   return { id, missionId: mission.id, missionName: mission.name, destination: mission.destination, phase, reason,

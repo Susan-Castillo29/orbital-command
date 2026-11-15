@@ -1,7 +1,7 @@
 import type { Mission } from '../data/missions';
 import { instruments, launchers, orbitProfiles, type MissionDesign } from './engineering.ts';
 import type { ExplorationResources } from './lunarCampaign';
-import { readStorage, writeStorage } from './storage.ts';
+import { readStorage, removeStorage, writeStorage } from './storage.ts';
 import type { LabReading } from '../data/planetaryLab';
 import { isEonetTarget, type EonetTarget } from './eonet.ts';
 
@@ -83,4 +83,10 @@ export function saveReport(report: ScienceReport): boolean {
   volatileReports = saved ? null : next;
   if (saved) writeStorage(TRANSMISSIONS_KEY, String(readReportTransmissionCount() + 1));
   return saved;
+}
+
+export function resetReportsForNewCampaign(): void {
+  volatileReports = [];
+  removeStorage(KEY);
+  removeStorage(TRANSMISSIONS_KEY);
 }
