@@ -169,12 +169,12 @@ export default function Commander({ mission, screen, language }: Props) {
     const onTransmission = (event: Event) => {
       const detail = (event as CustomEvent<Transmission & { forceSpeak?: boolean }>).detail;
       if (!detail || typeof detail.id !== 'string' || typeof detail.title !== 'string' || typeof detail.text !== 'string') return;
-      const isSpanishMedalMessage = detail.id === 'campaign-complete';
-      const transmission = language === 'en' && !isSpanishMedalMessage ? translateTransmission(detail, destination) : detail;
+      const isCampaignMessage = detail.id === 'campaign-complete';
+      const transmission = language === 'en' && !isCampaignMessage ? translateTransmission(detail, destination) : detail;
       setCurrent(transmission);
       setHistory((previous) => [...previous, transmission].slice(-40));
       showCaption();
-      if ((audioActivated.current || detail.forceSpeak) && settings.voice) play(transmission, settings, isSpanishMedalMessage ? 'es' : language);
+      if ((audioActivated.current || detail.forceSpeak) && settings.voice) play(transmission, settings, language);
     };
     window.addEventListener('orbital-commander-transmission', onTransmission);
     return () => window.removeEventListener('orbital-commander-transmission', onTransmission);

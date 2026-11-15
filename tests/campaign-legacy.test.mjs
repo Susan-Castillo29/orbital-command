@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { missions } from '../src/data/missions.ts';
 import { initialDesign } from '../src/systems/engineering.ts';
-import { completeCampaignIfEligible, beginNewCampaign, campaignCompletionRequirements, loadCampaignArchive, GALACTIC_EXPLORER_MEDAL } from '../src/systems/campaignLegacy.ts';
+import { completeCampaignIfEligible, beginNewCampaign, campaignCompletionRequirements, loadCampaignArchive, campaignMessage, GALACTIC_EXPLORER_MEDAL } from '../src/systems/campaignLegacy.ts';
 import { resetCampaignProgress } from '../src/systems/campaignReset.ts';
 import { createScienceReport, loadReports, saveReport } from '../src/systems/science.ts';
 import { loadPlayerProgress } from '../src/systems/playerProgress.ts';
@@ -83,6 +83,7 @@ test('new campaign reset clears mission progress and reports but preserves medal
   store.set('orbital-command-survey-sun', JSON.stringify({ transmitted: true }));
   store.set('orbital-command-transit-v1-mars', JSON.stringify({ state: 'in progress' }));
   store.set('orbital-command-tutorial-moon', 'done');
+  store.set('orbital-command-design-v1-moon', '{\"old\":true}');
   store.set('orbital-command-player', JSON.stringify({ credits: 50, xp: 500, completedMissions: missions.map((mission) => mission.id) }));
   resetCampaignProgress();
   assert.deepEqual(loadPlayerProgress(), { credits: 600, xp: 0, completedMissions: [] });
@@ -92,6 +93,12 @@ test('new campaign reset clears mission progress and reports but preserves medal
   assert.equal(store.has('orbital-command-survey-sun'), false);
   assert.equal(store.has('orbital-command-transit-v1-mars'), false);
   assert.equal(store.has('orbital-command-tutorial-moon'), false);
+  assert.equal(store.has('orbital-command-design-v1-moon'), false);
   assert.equal(loadCampaignArchive().medals.length, 1);
   assert.equal(loadCampaignArchive().campaigns.length, 1);
+});
+
+test('the commander congratulates the player in the selected language', () => {
+  assert.match(campaignMessage('en'), /Commander, mission accomplished/);
+  assert.match(campaignMessage('es'), /Comandante, misión cumplida/);
 });

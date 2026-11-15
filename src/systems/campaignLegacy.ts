@@ -7,6 +7,8 @@ export const CAMPAIGN_ARCHIVE_KEY = 'orbital-command-campaign-archive-v1';
 export const ACTIVE_CAMPAIGN_KEY = 'orbital-command-active-campaign-v1';
 export const GALACTIC_EXPLORER_MEDAL = 'galactic-explorer';
 export const campaignCommanderMessage = 'Comandante, misión cumplida. Has recorrido nuestro sistema solar, superado desafíos científicos y demostrado que la perseverancia y el conocimiento pueden llevarnos más lejos de lo que imaginamos.\n\nEn nombre de todo el equipo de ORBITAL COMMAND, te otorgamos la Medalla de Explorador Galáctico.\n\nHas demostrado que explorar no consiste solamente en descubrir nuevos mundos, sino también en comprender y proteger el nuestro.\n\n¡Felicidades, comandante!';
+export const campaignCommanderMessageEn = 'Commander, mission accomplished. You have travelled across our solar system, overcome scientific challenges and shown how perseverance and knowledge can take us further than we imagined.\n\nOn behalf of everyone at ORBITAL COMMAND, we award you the Galactic Explorer Medal.\n\nExploration is not only about discovering new worlds; it is also about understanding and protecting our own.\n\nCongratulations, Commander!';
+export function campaignMessage(language: 'en' | 'es'): string { return language === 'en' ? campaignCommanderMessageEn : campaignCommanderMessage; }
 
 export type CampaignRecord = {
   id: string;

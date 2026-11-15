@@ -27,3 +27,11 @@ test('a failed restore rolls back the prior campaign when storage recovers',()=>
  assert.throws(()=>restoreCampaign(storage,{version:1,items:{'orbital-command-player':'new'}}));
  assert.equal(values.get('orbital-command-player'),'old');assert.equal(values.get('orbital-command-progress-earth'),'old-progress');assert.equal(values.get('other'),'untouched');
 });
+
+test('cloud backup retains campaign medals and the active campaign',()=>{
+ const values=new Map([['orbital-command-campaign-archive-v1', JSON.stringify({version:1,medals:[{id:'galactic-explorer',earnedAt:'2026-11-14T12:00:00Z'}],campaigns:[]})],['orbital-command-active-campaign-v1','{\"completed\":true}']]);
+ const storage={get length(){return values.size},key:i=>[...values.keys()][i]??null,getItem:k=>values.get(k)??null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};
+ const snapshot=captureCampaign(storage);values.clear();restoreCampaign(storage,snapshot);
+ assert.equal(JSON.parse(values.get('orbital-command-campaign-archive-v1')).medals[0].id,'galactic-explorer');
+ assert.equal(JSON.parse(values.get('orbital-command-active-campaign-v1')).completed,true);
+});

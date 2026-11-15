@@ -1,12 +1,17 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import type { CampaignArchive, CampaignRecord } from '../systems/campaignLegacy';
-import { campaignCommanderMessage } from '../systems/campaignLegacy';
+import { campaignMessage } from '../systems/campaignLegacy';
+import { missions } from '../data/missions';
 import './campaign-celebration.css';
+const GlobalLeaderboard = lazy(() => import('./GlobalLeaderboard'));
+const ExplorerDiploma = lazy(() => import('./ExplorerDiploma'));
+
 
 type Props = {
   mode: 'victory' | 'records';
   record: CampaignRecord | null;
   archive: CampaignArchive;
+  completedMissions: string[];
   language: 'en' | 'es';
   medalSaved: boolean;
   onRestart: () => void;
@@ -24,9 +29,11 @@ const duration = (milliseconds: number, language: 'en' | 'es') => {
   return language === 'es' ? `${hours} h ${remaining} min` : `${hours} h ${remaining} min`;
 };
 
-export default function CampaignCelebration({ mode, record, archive, language, medalSaved, onRestart, onReturnToMain, onClose, onUpdateCommander, onListen }: Props) {
+export default function CampaignCelebration({ mode, record, archive, completedMissions, language, medalSaved, onRestart, onReturnToMain, onClose, onUpdateCommander, onListen }: Props) {
   const [confirmRestart, setConfirmRestart] = useState(false);
+  const [diplomaRecord, setDiplomaRecord] = useState<CampaignRecord | null>(null);
   const es = language === 'es';
+  const completedCount = missions.filter((mission) => completedMissions.includes(mission.id)).length;
   const completedDate = record ? new Date(record.completedAt).toLocaleString(es ? 'es-DO' : 'en-GB', { dateStyle: 'long', timeStyle: 'short' }) : '';
 
   return <div className="campaign-stage" role="dialog" aria-modal="true" aria-label={es ? 'Medalla y registro de campaña' : 'Campaign medal and record'}>
@@ -62,7 +69,7 @@ export default function CampaignCelebration({ mode, record, archive, language, m
           </svg>
         </div>
         <div className="campaign-medal-caption">{es ? 'CAMPAÑA COMPLETADA' : 'CAMPAIGN COMPLETE'}</div>
-        <div className="campaign-command-message"><strong>{es ? 'TRANSMISIÓN DEL COMANDANTE · TIERRA' : 'COMMANDER TRANSMISSION · EARTH'}</strong><p lang="es">{campaignCommanderMessage}</p><button type="button" onClick={onListen}>{es ? '▶ ESCUCHAR TRANSMISIÓN EN ESPAÑOL' : '▶ HEAR THE COMMANDER IN SPANISH'}</button></div>
+        <div className="campaign-command-message"><strong>{es ? 'TRANSMISIÓN DEL COMANDANTE · TIERRA' : 'COMMANDER TRANSMISSION · EARTH'}</strong><p lang={es ? 'es' : 'en-GB'}>{campaignMessage(language)}</p><button type="button" onClick={onListen}>{es ? '▶ ESCUCHAR TRANSMISIÓN' : '▶ HEAR THE COMMANDER'}</button></div>
         {!medalSaved && <p className="campaign-storage-alert" role="alert">{es ? 'El navegador no permitió guardar la medalla de forma permanente. Puedes volver al menú; iniciar otra campaña podría perder este registro.' : 'The browser could not save the medal permanently. You can return to the menu; starting another campaign could lose this record.'}</p>}
         <section className="campaign-summary" aria-label={es ? 'Resumen de campaña' : 'Campaign summary'}>
           <label>{es ? 'Comandante' : 'Commander'}<input value={record.commander} placeholder={es ? 'Comandante' : 'Commander'} maxLength={48} onChange={(event) => onUpdateCommander(event.target.value)} /></label>
@@ -71,19 +78,21 @@ export default function CampaignCelebration({ mode, record, archive, language, m
           <div><span>{es ? 'Muestras simuladas' : 'Simulated samples'}</span><b>{record.sampleCount}</b></div>
           <div><span>{es ? 'Tiempo total de juego' : 'Total play time'}</span><b>{duration(record.playtimeMs, language)}</b></div>
           <div><span>{es ? 'Tiempo de misión simulado' : 'Simulated mission time'}</span><b>{record.simulatedDays.toFixed(1)} {es ? 'días' : 'days'}</b></div>
-          <div><span>{es ? 'Recursos utilizados' : 'Resources used'}</span><b>{record.fuelUsedPercent.toFixed(0)}% {es ? 'combustible' : 'fuel'} · {record.energyUsedPercent.toFixed(0)}% {es ? 'energía' : 'energy'}</b></div>
+          <div><span>{es ? 'Consumo sumado por misión' : 'Consumption summed across missions'}</span><b>{record.fuelUsedPercent.toFixed(0)}% {es ? 'combustible' : 'fuel'} · {record.energyUsedPercent.toFixed(0)}% {es ? 'energía' : 'energy'}</b></div>
           <div><span>{es ? 'Fecha de finalización' : 'Completion date'}</span><b>{completedDate}</b></div>
           <div className="campaign-destinations"><span>{es ? 'Destinos completados' : 'Completed destinations'}</span><b>{record.destinations.join(' · ')}</b></div>
         </section>
-        <div className="campaign-actions"><button type="button" className="campaign-secondary" onClick={onReturnToMain}>{es ? 'VOLVER AL MENÚ PRINCIPAL' : 'RETURN TO MAIN MENU'}</button><button type="button" className="campaign-primary" onClick={() => setConfirmRestart(true)}>{es ? 'VOLVER A JUGAR' : 'PLAY AGAIN'}</button></div>
+        <div className="campaign-actions"><button type="button" className="campaign-secondary" onClick={() => setDiplomaRecord(record)}>{es ? "VER DIPLOMA" : "VIEW DIPLOMA"}</button><button type="button" className="campaign-secondary" onClick={onReturnToMain}>{es ? 'VOLVER AL MENÚ PRINCIPAL' : 'RETURN TO MAIN MENU'}</button><button type="button" className="campaign-primary" onClick={() => setConfirmRestart(true)}>{es ? 'VOLVER A JUGAR' : 'PLAY AGAIN'}</button></div>
       </> : <>
         <span className="campaign-kicker">ORBITAL COMMAND · {es ? 'HISTORIAL PERMANENTE' : 'PERMANENT RECORD'}</span>
         <h1>{es ? 'MEDALLAS Y CAMPAÑAS' : 'MEDALS AND CAMPAIGNS'}</h1>
-        <div className="campaign-archive-medals">{archive.medals.map((medal) => <div className="campaign-archive-medal" key={medal.id}><span>✦</span><strong>{es ? 'MEDALLA DE EXPLORADOR GALÁCTICO' : 'GALACTIC EXPLORER MEDAL'}</strong><small>{new Date(medal.earnedAt).toLocaleDateString(es ? 'es-DO' : 'en-GB')}</small></div>)}{archive.medals.length === 0 && <p>{es ? 'Aún no se han obtenido medallas.' : 'No medals have been earned yet.'}</p>}</div>
-        <ol className="campaign-archive-list">{[...archive.campaigns].reverse().map((entry) => <li key={entry.id}><strong>{entry.commander}</strong><span>{entry.missionCount} {es ? 'misiones' : 'missions'} · {entry.destinations.join(', ')}</span><time dateTime={entry.completedAt}>{new Date(entry.completedAt).toLocaleString(es ? 'es-DO' : 'en-GB')}</time></li>)}</ol>
+        <div className="campaign-archive-medals">{archive.medals.map((medal) => <div className="campaign-archive-medal" key={medal.id}><span>✦</span><strong>{es ? 'MEDALLA DE EXPLORADOR GALÁCTICO' : 'GALACTIC EXPLORER MEDAL'}</strong><small>{new Date(medal.earnedAt).toLocaleDateString(es ? 'es-DO' : 'en-GB')}</small></div>)}{archive.medals.length === 0 && <div className="campaign-medal-progress"><strong>{es ? 'MEDALLA POR DESCUBRIR' : 'MEDAL TO DISCOVER'}</strong><p>{es ? 'Completa todas las misiones y transmite sus informes para obtenerla.' : 'Complete every mission and transmit its report to earn it.'}</p><label htmlFor="campaign-medal-progress">{es ? 'Misiones completadas' : 'Missions completed'}: {completedCount} / {missions.length}</label><progress id="campaign-medal-progress" value={completedCount} max={missions.length} /></div>}</div>
+        <ol className="campaign-archive-list">{[...archive.campaigns].reverse().map((entry) => <li key={entry.id}><strong>{entry.commander}</strong><span>{entry.missionCount} {es ? 'misiones' : 'missions'} · {entry.destinations.join(', ')}</span><button className="campaign-secondary diploma-open" type="button" onClick={() => setDiplomaRecord(entry)}>{es ? "DIPLOMA" : "DIPLOMA"}</button><time dateTime={entry.completedAt}>{new Date(entry.completedAt).toLocaleString(es ? 'es-DO' : 'en-GB')}</time></li>)}</ol>
+        <Suspense fallback={<p role="status">{es ? "Cargando podio…" : "Loading leaderboard…"}</p>}><GlobalLeaderboard language={language} /></Suspense>
         <div className="campaign-actions"><button type="button" className="campaign-primary" onClick={onClose}>{es ? 'VOLVER' : 'BACK'}</button></div>
       </>}
     </div>
+    {diplomaRecord && <Suspense fallback={<p role="status">{es ? "Cargando diploma…" : "Loading diploma…"}</p>}><ExplorerDiploma record={diplomaRecord} language={language} onClose={() => setDiplomaRecord(null)} /></Suspense>}
     {confirmRestart && mode === 'victory' && <div className="campaign-confirm-backdrop"><section className="campaign-confirm" role="alertdialog" aria-modal="true" aria-labelledby="campaign-confirm-title"><span className="campaign-kicker">ORBITAL COMMAND · RESET</span><h2 id="campaign-confirm-title">{es ? '¿Deseas comenzar una nueva campaña?' : 'Start a new campaign?'}</h2><p>{es ? 'Tu progreso actual de misiones se reiniciará, pero conservarás tu medalla y el registro de las campañas que hayas completado.' : 'Your current mission progress will reset, but you will keep your medal and the record of completed campaigns.'}</p><div><button type="button" className="campaign-secondary" onClick={() => setConfirmRestart(false)}>{es ? 'CANCELAR' : 'CANCEL'}</button><button type="button" className="campaign-primary" onClick={onRestart}>{es ? 'COMENZAR NUEVA CAMPAÑA' : 'START NEW CAMPAIGN'}</button></div></section></div>}
   </div>;
 }

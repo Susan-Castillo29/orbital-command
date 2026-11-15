@@ -29,3 +29,11 @@ This is **shared planning and turn-based campaign exchange**, not yet synchronis
 - `tests/supabase-rls.sql` tests team privacy, invitation rotation, four-member limit, revision conflicts and campaign isolation. It was run against disposable PostgreSQL with a mocked `auth.uid()`; it is not a substitute for a test against the actual Supabase project.
 - `tests/browser-collaboration.cjs` exercises two browser contexts using a mocked Supabase service. Start Vite with `VITE_SUPABASE_URL=https://orbitaltest.supabase.co VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_test npm run dev -- --host 127.0.0.1 --port 4190 --strictPort`, then run `node tests/browser-collaboration.cjs`. The mock does not connect to a real account.
 - Before inviting real users, test confirmation emails, two real accounts, the four-person limit, private backups, role changes, stale-write conflicts, revocation, restoration, cross-device behaviour, rate limits and RLS in the actual project. Review storage, backups, retention, account recovery and security monitoring for the expected deployment.
+
+## Global leaderboard and explorer diploma
+
+Run [`supabase/migrations/202611150002_leaderboard.sql`](../supabase/migrations/202611150002_leaderboard.sql) after the collaboration migration to enable the optional top ten. New registrations request a username, first name and first surname; existing users can complete these in Teams. A player must save a private campaign backup before choosing to publish. The public leaderboard displays those profile fields and XP; participation can be withdrawn. Profile changes appear after publishing again. Never place sensitive information in the public name fields.
+
+The ranking reads XP from the player's saved campaign. The current simulation runs client-side, so these scores are **player-reported and unverified**, not suitable for prizes, trusted competitions or anti-cheat decisions. The printable diploma is available only in the game after a complete campaign, or from a completed campaign record; it is an in-game recognition, not an independently verified credential.
+
+Run `tests/supabase-leaderboard.sql` after both migrations in a disposable PostgreSQL database with a mocked Supabase auth schema. This does not replace integration tests with real accounts and the production RLS configuration.

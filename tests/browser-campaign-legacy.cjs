@@ -17,7 +17,7 @@ function fixtures(omitMission = null) {
     netFuelUsed:10, netEnergyUsed:20,
   }));
 }
-async function makeContext(browser, completed, reports) {
+async function makeContext(browser, completed, reports, language = 'en') {
   const context = await browser.newContext({ viewport:{ width:1440, height:1000 } });
   const origin = new URL(url).origin;
   const distRoot = path.resolve(__dirname, '../dist');
@@ -37,12 +37,13 @@ async function makeContext(browser, completed, reports) {
       await route.fulfill({ status:404, body:'Not found' });
     }
   });
-  await context.addInitScript(({ completedMissions, missionReports }) => {
+  await context.addInitScript(({ completedMissions, missionReports, language }) => {
+    localStorage.setItem('orbital-command-language', language);
     localStorage.setItem('orbital-command-operations-guide-v1','done');
     localStorage.setItem('orbital-command-visual-guide-v1','done');
     localStorage.setItem('orbital-command-player',JSON.stringify({ credits:600, xp:0, completedMissions }));
     localStorage.setItem('orbital-command-reports-v1',JSON.stringify(missionReports));
-  }, { completedMissions:completed, missionReports:reports });
+  }, { completedMissions:completed, missionReports:reports, language });
   const page = await context.newPage();
   await page.goto(url,{ waitUntil:'networkidle' });
   return { context, page };
@@ -56,6 +57,10 @@ async function makeContext(browser, completed, reports) {
     const first = await makeContext(browser,partial,fixtures(lastMission));
     await first.page.getByText('Your next mission').waitFor();
     assert.equal(await first.page.getByRole('heading',{ name:'GALACTIC EXPLORER MEDAL' }).count(),0,'an unfinished campaign must not award the medal');
+    assert.equal(await first.page.getByRole('button',{name:'VIEW DIPLOMA'}).count(),0,'unfinished campaigns must not issue a diploma');
+    await first.page.getByRole('button',{ name:/MEDALS/ }).click();
+    assert.equal(await first.page.locator('#campaign-medal-progress').getAttribute('value'), String(partial.length));
+    await first.page.getByRole('button',{ name:'BACK', exact:true }).click();
     await first.page.evaluate(({ ids, reports }) => {
       const progress={ credits:600, xp:0, completedMissions:ids };
       localStorage.setItem('orbital-command-player',JSON.stringify(progress));
@@ -63,7 +68,14 @@ async function makeContext(browser, completed, reports) {
       window.dispatchEvent(new CustomEvent('orbital-player-progress',{ detail:progress }));
     },{ ids:missionIds, reports:fixtures() });
     await first.page.getByRole('heading',{ name:'GALACTIC EXPLORER MEDAL' }).waitFor();
-    assert.match(await first.page.locator('.campaign-command-message p').innerText(),/Comandante, misión cumplida/);
+    assert.match(await first.page.locator('.campaign-command-message p').innerText(),/Commander, mission accomplished/);
+    await first.page.getByRole('button',{name:'VIEW DIPLOMA'}).click();
+    await first.page.getByRole('heading',{name:'Galactic Explorer Medal',exact:true}).waitFor();
+    for (const person of ['Caos Torres','Susan Castillo','Israel Melo','Wady Cruz','Emil Castillo','Gabriela']) assert.equal(await first.page.locator('.diploma-signatures').getByText(person,{exact:true}).count(),1);
+    await first.page.evaluate(() => { window.print = () => { window.__diplomaPrinted = true; }; });
+    await first.page.getByRole('button',{name:'PRINT / SAVE PDF'}).click();
+    assert.equal(await first.page.evaluate(() => window.__diplomaPrinted), true);
+    await first.page.getByRole('button',{name:'CLOSE',exact:true}).click();
     const archive = await first.page.evaluate(() => JSON.parse(localStorage.getItem('orbital-command-campaign-archive-v1')));
     assert.equal(archive.medals.length,1);
     assert.equal(archive.campaigns.length,1);
@@ -98,6 +110,10 @@ async function makeContext(browser, completed, reports) {
     assert.equal(fresh.active.completed,false);
     assert.equal(fresh.active.playtimeMs,0);
     await second.context.close();
+    const spanish = await makeContext(browser, missionIds, fixtures(), 'es');
+    await spanish.page.getByRole('heading',{ name:'MEDALLA DE EXPLORADOR GALÁCTICO' }).waitFor();
+    assert.match(await spanish.page.locator('.campaign-command-message p').innerText(), /Comandante, misión cumplida/);
+    await spanish.context.close();
     console.log('Campaign medal, persistent record, return-to-menu, confirmation, reset and replay passed.');
   } finally { await browser.close(); }
 })().catch((error) => { console.error(error); process.exit(1); });

@@ -4,7 +4,7 @@ import { resetPlayerProgress } from './playerProgress.ts';
 import { resetReportsForNewCampaign } from './science.ts';
 import { removeStorage } from './storage.ts';
 
-const missionState = ['progress', 'resources', 'survey', 'lab', 'sensors', 'buffers', 'events', 'eonet-scan', 'photos', 'tutorial', 'transit-v1'];
+const missionState = ['progress', 'resources', 'survey', 'lab', 'sensors', 'buffers', 'events', 'eonet-scan', 'photos', 'tutorial', 'transit-v1', 'design-v1'];
 const oneCampaignState = [
   'orbital-command-mission',
   'orbital-command-ship',

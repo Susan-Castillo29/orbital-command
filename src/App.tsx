@@ -17,7 +17,7 @@ import { initialPlayerProgress, loadPlayerProgress, type PlayerProgress } from '
 import { playRadioCue, playSound } from './systems/audio';
 import { validatePublicConfig } from './collaboration/config';
 import { ships, type ShipId } from './data/ships';
-import { addCampaignPlaytime, beginNewCampaign, campaignCommanderMessage, completeCampaignIfEligible, getOrStartActiveCampaign, loadCampaignArchive, updateCampaignCommander, type CampaignRecord } from './systems/campaignLegacy';
+import { addCampaignPlaytime, beginNewCampaign, campaignMessage, completeCampaignIfEligible, getOrStartActiveCampaign, loadCampaignArchive, updateCampaignCommander, type CampaignRecord } from './systems/campaignLegacy';
 import { resetCampaignProgress } from './systems/campaignReset';
 import { loadReports } from './systems/science';
 
@@ -107,9 +107,9 @@ function App() {
     if (completion.newlyCompleted) {
       playSound('complete');
       playRadioCue();
-      window.dispatchEvent(new CustomEvent('orbital-commander-transmission', { detail: { id: 'campaign-complete', title: 'MEDALLA DE EXPLORADOR GALÁCTICO', text: campaignCommanderMessage, forceSpeak: true } }));
+      window.dispatchEvent(new CustomEvent('orbital-commander-transmission', { detail: { id: 'campaign-complete', title: t('MEDALLA DE EXPLORADOR GALÁCTICO', 'GALACTIC EXPLORER MEDAL'), text: campaignMessage(language), forceSpeak: true } }));
     }
-  }, [player, activeCampaign.completed, commanderName]);
+  }, [player, activeCampaign.completed, commanderName, language]);
 
   const selectMission = (id: string) => {
     const next = missions.find((item) => item.id === id);
@@ -138,7 +138,7 @@ function App() {
   };
   const listenToCampaignMessage = () => {
     playRadioCue();
-    window.dispatchEvent(new CustomEvent('orbital-commander-transmission', { detail: { id: 'campaign-complete', title: 'MEDALLA DE EXPLORADOR GALÁCTICO', text: campaignCommanderMessage, forceSpeak: true } }));
+    window.dispatchEvent(new CustomEvent('orbital-commander-transmission', { detail: { id: 'campaign-complete', title: t('MEDALLA DE EXPLORADOR GALÁCTICO', 'GALACTIC EXPLORER MEDAL'), text: campaignMessage(language), forceSpeak: true } }));
   };
   const startNewCampaign = () => {
     const freshProgress = resetCampaignProgress();
@@ -261,7 +261,7 @@ function App() {
       {visualGuide && ((screen === 'home' && (visualGuide === 'select' || visualGuide === 'prepare')) || (screen === 'mission' && visualGuide === 'design') || (screen === 'engineering' && visualGuide === 'confirm')) && <aside className="visual-guide" aria-live="polite"><div><strong>{t('GUÍA VISUAL', 'VISUAL GUIDE')} · {({select: 1, prepare: 2, design: 3, confirm: 4})[visualGuide]}/4</strong><p>{visualGuide === 'select' ? t('Selecciona la misión iluminada para comenzar.', 'Select the highlighted mission to begin.') : visualGuide === 'prepare' ? t('Pulsa Preparar misión para abrir el expediente.', 'Select Prepare mission to open the briefing.') : visualGuide === 'design' ? t('Pulsa Diseñar misión para elegir la nave y los instrumentos.', 'Select Design mission to choose your spacecraft and instruments.') : t('Revisa el diseño y pulsa Confirmar configuración para continuar.', 'Review your design and select Confirm configuration to continue.')}</p></div><button type="button" onClick={finishVisualGuide}>{t('Omitir', 'Skip')}</button></aside>}
       <Commander mission={mission} screen={screen} language={language} />
       {notice && <div className="toast" role="status"><span>✓</span>{notice}</div>}
-      {campaignDialog && <CampaignCelebration mode={campaignDialog} record={campaignDialog === 'victory' ? campaignRecord : null} archive={campaignArchive} language={language} medalSaved={campaignMedalSaved} onRestart={startNewCampaign} onReturnToMain={() => { setCampaignDialog(null); setScreen('home'); }} onClose={() => setCampaignDialog(null)} onUpdateCommander={updateCommanderName} onListen={listenToCampaignMessage} />}
+      {campaignDialog && <CampaignCelebration mode={campaignDialog} record={campaignDialog === 'victory' ? campaignRecord : null} archive={campaignArchive} completedMissions={player.completedMissions} language={language} medalSaved={campaignMedalSaved} onRestart={startNewCampaign} onReturnToMain={() => { setCampaignDialog(null); setScreen('home'); }} onClose={() => setCampaignDialog(null)} onUpdateCommander={updateCommanderName} onListen={listenToCampaignMessage} />}
     </main>
   );
 }
