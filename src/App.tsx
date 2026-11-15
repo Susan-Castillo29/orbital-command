@@ -51,6 +51,7 @@ function App() {
   const [sharedDesign, setSharedDesign] = useState<MissionDesign | null>(null);
   const [scienceTarget, setScienceTarget] = useState<EonetTarget | null>(() => { try { const value: unknown = JSON.parse(readStorage('orbital-command-eonet-target-v1') ?? 'null'); return isEonetTarget(value) ? value : null; } catch { return null; } });
   const [arrival, setArrival] = useState<TransitState | null>(null);
+  const [missionLaunch, setMissionLaunch] = useState(false);
   const [notice, setNotice] = useState('');
   const [player, setPlayer] = useState<PlayerProgress>(() => typeof window === 'undefined' ? initialPlayerProgress : loadPlayerProgress());
   const [activeCampaign, setActiveCampaign] = useState(() => getOrStartActiveCampaign());
@@ -78,15 +79,22 @@ function App() {
 
   useEffect(() => {
     if (!liveSession.connected || !liveSession.worldState) return;
-    const sharedMission = missions.find((item) => item.id === liveSession.worldState?.missionId);
+    const sharedState = liveSession.worldState;
+    const sharedMission = missions.find((item) => item.id === sharedState.missionId);
     if (sharedMission && sharedMission.id !== mission.id) setMission(sharedMission);
-    if (liveSession.worldState.shipId && liveSession.worldState.shipId !== shipId) {
-      setShipId(liveSession.worldState.shipId);
-      window.dispatchEvent(new CustomEvent('orbital-ship-change', { detail: liveSession.worldState.shipId }));
+    if (sharedState.shipId && sharedState.shipId !== shipId) {
+      setShipId(sharedState.shipId);
+      window.dispatchEvent(new CustomEvent('orbital-ship-change', { detail: sharedState.shipId }));
     }
-    if (liveSession.worldState.design && JSON.stringify(liveSession.worldState.design) !== JSON.stringify(design)) setDesign(liveSession.worldState.design);
-    if (liveSession.worldState.arrival !== undefined && JSON.stringify(liveSession.worldState.arrival) !== JSON.stringify(arrival)) setArrival(liveSession.worldState.arrival);
-    if (liveSession.worldState.screen !== screen) setScreen(liveSession.worldState.screen);
+    if (sharedState.design && JSON.stringify(sharedState.design) !== JSON.stringify(design)) setDesign(sharedState.design);
+    if (sharedState.arrival !== undefined && JSON.stringify(sharedState.arrival) !== JSON.stringify(arrival)) setArrival(sharedState.arrival);
+    if (sharedState.launchId && sharedState.launchAt) {
+      setMissionLaunch(true);
+      const timer = window.setTimeout(() => { setScreen(sharedState.screen); setMissionLaunch(false); }, Math.max(0, sharedState.launchAt - Date.now()));
+      return () => window.clearTimeout(timer);
+    }
+    setMissionLaunch(false);
+    if (sharedState.screen !== screen) setScreen(sharedState.screen);
   }, [liveSession.connected, liveSession.worldState?.routeUpdatedAt]);
 
   useEffect(() => {
@@ -283,12 +291,13 @@ function App() {
           <ExplorationScene language={language} mission={mission} onExit={() => setScreen('home')} shipId={shipId} design={design} arrival={arrival} scienceTarget={mission.id === 'earth' ? scienceTarget : null} />
         )}
         </Suspense></SceneBoundary>
-        {teamVisited && <div className="collaboration-container" hidden={screen !== 'team'}><SceneBoundary language={language}><Suspense fallback={<div className="systems-loading" role="status">{t('CARGANDO CUENTAS…', 'LOADING ACCOUNTS…')}</div>}><CollaborationHub language={language} mission={mission} onExit={() => setScreen('home')} onApply={(id, candidate) => { const next = missions.find(item => item.id === id); if (!next || !chapterUnlocked(id, player.completedMissions)) return false; setMission(next); setSharedDesign(candidate); setShipId(candidate.ship); setScreen('engineering'); return true; }} /></Suspense></SceneBoundary></div>}
+        {teamVisited && <div className="collaboration-container" hidden={screen !== 'team'}><SceneBoundary language={language}><Suspense fallback={<div className="systems-loading" role="status">{t('CARGANDO CUENTAS…', 'LOADING ACCOUNTS…')}</div>}><CollaborationHub language={language} mission={mission} shipId={shipId} design={design} onExit={() => setScreen('home')} onApply={(id, candidate) => { const next = missions.find(item => item.id === id); if (!next || !chapterUnlocked(id, player.completedMissions)) return false; setMission(next); setSharedDesign(candidate); setShipId(candidate.ship); setScreen('engineering'); return true; }} /></Suspense></SceneBoundary></div>}
         </div>
       </div>
       <footer className="statusbar"><span><i className="live-dot" />{t(' SIMULACIÓN LOCAL', ' LOCAL SIMULATION')}</span><span>ORBITAL COMMAND <i>·</i> BUILD 0.1.0</span><span>EDUCATIONAL MODEL <i>·</i> ALL VALUES APPROXIMATE</span></footer>
       {visualGuide && ((screen === 'home' && (visualGuide === 'select' || visualGuide === 'prepare')) || (screen === 'mission' && visualGuide === 'design') || (screen === 'engineering' && visualGuide === 'confirm')) && <aside className="visual-guide" aria-live="polite"><div><strong>{t('GUÍA VISUAL', 'VISUAL GUIDE')} · {({select: 1, prepare: 2, design: 3, confirm: 4})[visualGuide]}/4</strong><p>{visualGuide === 'select' ? t('Selecciona la misión iluminada para comenzar.', 'Select the highlighted mission to begin.') : visualGuide === 'prepare' ? t('Pulsa Preparar misión para abrir el expediente.', 'Select Prepare mission to open the briefing.') : visualGuide === 'design' ? t('Pulsa Diseñar misión para elegir la nave y los instrumentos.', 'Select Design mission to choose your spacecraft and instruments.') : t('Revisa el diseño y pulsa Confirmar configuración para continuar.', 'Review your design and select Confirm configuration to continue.')}</p></div><button type="button" onClick={finishVisualGuide}>{t('Omitir', 'Skip')}</button></aside>}
       <Commander mission={mission} screen={screen === 'roles' || screen === 'scientist' ? 'team' : screen} language={language} />
+      {missionLaunch && <div className="mission-launch-overlay" role="status" aria-live="assertive"><div><span>COOPERATIVE MULTIPLAYER · {t('MISIÓN EN EQUIPO','TEAM MISSION')}</span><h1>{t('PREPARANDO EXPEDICIÓN…','PREPARING EXPEDITION…')}</h1><p>{t('SINCRONIZANDO EQUIPO…','SYNCHRONISING TEAM…')}</p><p>{t('INICIANDO MISIÓN…','STARTING MISSION…')}</p></div></div>}
       {notice && <div className="toast" role="status"><span>✓</span>{notice}</div>}
       {campaignDialog && <CampaignCelebration mode={campaignDialog} record={campaignDialog === 'victory' ? campaignRecord : null} archive={campaignArchive} completedMissions={player.completedMissions} language={language} medalSaved={campaignMedalSaved} onRestart={startNewCampaign} onReturnToMain={() => { setCampaignDialog(null); setScreen('home'); }} onClose={() => setCampaignDialog(null)} onUpdateCommander={updateCommanderName} onListen={listenToCampaignMessage} />}
     </main>

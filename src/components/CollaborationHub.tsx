@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { cloudClient } from '../collaboration/client';
-import { connectLiveTeam, disconnectLiveTeam, sendLiveMessage, useLiveSession, type LiveSnapshot } from '../collaboration/liveSession';
+import { connectLiveTeam, disconnectLiveTeam, sendLiveMessage, setLiveReady, startLiveMission, useLiveSession, type LiveSnapshot } from '../collaboration/liveSession';
 import { captureCampaign, parseCampaignSnapshot, restoreCampaign, type CampaignSnapshot } from '../collaboration/campaignSnapshot';
 import { parseDesignSnapshot } from '../systems/designSnapshot';
 import { readStorage } from '../systems/storage';
 import type { MissionDesign } from '../systems/engineering';
 import type { Mission } from '../data/missions';
+import type { ShipId } from '../data/ships';
 import './mission-systems.css';
 import './collaboration.css';
 
-type Props = { language: 'en' | 'es'; mission: Mission; onExit: () => void; onApply: (id: string, design: MissionDesign) => boolean };
+type Props = { language: 'en' | 'es'; mission: Mission; shipId: ShipId; design: MissionDesign; onExit: () => void; onApply: (id: string, design: MissionDesign) => boolean };
 type Team = { id: string; name: string; owner_id: string; created_at: string };
 type Member = { user_id: string; role: string };
 type Plan = { team_id: string; mission_id: string; design: unknown; revision: number; updated_at: string };
@@ -18,11 +19,11 @@ type CloudRecord = { snapshot: unknown; revision: number; updated_at: string };
 
 function sameLivePanel(left: LiveSnapshot, right: LiveSnapshot) {
  if(left.connected!==right.connected || left.error!==right.error || left.players.length!==right.players.length || left.messages.length!==right.messages.length) return false;
- if(left.players.some((player,index)=>{const next=right.players[index];return !next || player.userId!==next.userId || player.displayName!==next.displayName || player.role!==next.role || player.isHost!==next.isHost || player.pose.activity!==next.pose.activity;}))return false;
+ if(left.players.some((player,index)=>{const next=right.players[index];return !next || player.userId!==next.userId || player.displayName!==next.displayName || player.role!==next.role || player.isHost!==next.isHost || player.ready!==next.ready || player.pose.activity!==next.pose.activity;}))return false;
  return left.messages.at(-1)?.id===right.messages.at(-1)?.id;
 }
 
-export default function CollaborationHub({ language, mission, onExit, onApply }: Props) {
+export default function CollaborationHub({ language, mission, shipId, design, onExit, onApply }: Props) {
  const t = (es: string, en: string) => language === 'es' ? es : en;
  const [session,setSession]=useState<Session|null>(null); const [authReady,setAuthReady]=useState(false);
  const [email,setEmail]=useState(''); const [password,setPassword]=useState('');
@@ -108,6 +109,7 @@ export default function CollaborationHub({ language, mission, onExit, onApply }:
  <section className="systems-card"><h2>{t('Tus equipos', 'Your teams')}</h2><label>{t('Nuevo equipo', 'New team')}<input maxLength={60} value={teamName} onChange={event=>setTeamName(event.target.value)} /></label><button className="systems-secondary" disabled={busy || !teamName.trim()} onClick={()=>void createTeam()}>{t('CREAR EQUIPO','CREATE TEAM')}</button><label>{t('Código de invitación', 'Invitation code')}<input maxLength={32} autoComplete="off" value={joinCode} onChange={event=>setJoinCode(event.target.value.toLowerCase())} /></label><button className="systems-secondary" disabled={busy} onClick={()=>void joinTeam()}>{t('UNIRSE','JOIN TEAM')}</button>{invite && <div className="invite-box"><strong>{t('Comparte esta invitación de forma privada', 'Share this invitation privately')}</strong><input aria-label={t('Invitación generada','Generated invitation')} readOnly value={invite} /><small>{t('Cualquiera con el código puede intentar unirse; generar uno nuevo invalida el anterior.', 'Anyone with the code can try to join; generating a new one invalidates the previous code.')}</small></div>}
  {teams.length>0 && <><label>{t('Equipo activo','Active team')}<select value={teamId} onChange={event=>{setTeamId(event.target.value);setPlan(null);setTeamCampaign(null);setTeamCampaignReady(false);setInvite('');}}>{teams.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>{team && <><p>{t('Participantes','Participants')}: {members.length}/4</p><ul>{members.map(item=><li key={item.user_id}>{item.user_id===me?t('Tú','You'):item.user_id.slice(0,8)} · {item.role}</li>)}</ul><label>{t('Tu responsabilidad','Your responsibility')}<select value={myRole} onChange={event=>void updateRole(event.target.value)}><option value="planning">{t('Planificación','Planning')}</option><option value="engineering">{t('Ingeniería','Engineering')}</option><option value="science">{t('Ciencia','Science')}</option><option value="communications">{t('Comunicaciones','Communications')}</option></select></label><div className="collaboration-actions">{team.owner_id===me && <button className="systems-secondary" onClick={()=>void rotateInvite()}>{t('NUEVA INVITACIÓN','NEW INVITATION')}</button>}<button className="systems-secondary" onClick={()=>void exitTeam()}>{team.owner_id===me?t('ELIMINAR EQUIPO','DELETE TEAM'):t('SALIR DEL EQUIPO','LEAVE TEAM')}</button></div></>}</>}
  {team && <LiveTeamPanel language={language} me={me} live={live} />}{team && <div className="team-plan"><h3>{t('Plan compartido','Shared plan')}</h3><p>{t('La misión de referencia se comparte en tiempo real y los avatares del equipo se mueven en la escena 3D.', 'The shared mission is relayed in real time and team avatars move in the 3D scene.')}</p>{plan?.team_id === teamId && <p>{t('Misión','Mission')}: {plan.mission_id} · {t('revisión','revision')} {plan.revision}</p>}<div className="collaboration-actions"><button className="systems-secondary" disabled={!plan || plan.team_id!==teamId} onClick={()=>void publishPlan()}>{t('COMPARTIR DISEÑO GUARDADO','SHARE SAVED DESIGN')}</button><button className="systems-secondary" disabled={!parsedPlan} onClick={()=>{if(parsedPlan && !onApply(parsedPlan.missionId,parsedPlan.design))setStatus(t('Completa primero los capítulos necesarios para abrir esta misión.', 'Complete the required chapters before opening this mission.'));}}>{t('ABRIR PLAN','OPEN PLAN')}</button></div><small>{t('Se comparte el diseño guardado de la misión seleccionada actualmente.', 'Shares the saved design for your currently selected mission.')}</small><h3>{t('Campaña compartida', 'Shared campaign')}</h3><p>{t('Comparte tu progreso por turnos con los miembros del equipo. La copia contiene misiones, recursos e informes, no contraseñas.', 'Share your progress with team members in turns. The copy contains missions, resources and reports, not passwords.')}</p>{teamCampaign?.team_id === teamId && <p>{t('Revisión compartida', 'Shared revision')}: {teamCampaign.revision}</p>}<div className="collaboration-actions"><button className="systems-secondary" disabled={!teamCampaignReady || Boolean(teamCampaign && teamCampaign.team_id!==teamId)} onClick={()=>void shareTeamCampaign()}>{t('COMPARTIR CAMPAÑA', 'SHARE CAMPAIGN')}</button>{teamCampaign?.team_id === teamId && <button className="systems-secondary" onClick={()=>{const snapshot=parseCampaignSnapshot(teamCampaign.snapshot);if(!snapshot){setStatus(t('La copia del equipo no es válida.', 'The team backup is invalid.'));return;}if(!window.confirm(t('¿Reemplazar la campaña local con la del equipo? La página se recargará y tendrás que iniciar sesión otra vez.', 'Replace the local campaign with the team copy? The page will reload and you will need to sign in again.')))return;try{restoreCampaign(window.localStorage,snapshot);window.location.reload();}catch{setStatus(t('No se pudo restaurar la campaña.', 'The campaign could not be restored.'));}}}>{t('ABRIR CAMPAÑA DEL EQUIPO', 'OPEN TEAM CAMPAIGN')}</button>}</div></div>}</section></div>}
+ {team && <MissionLaunchPanel language={language} me={me} live={live} members={members} mission={mission} isHost={team.owner_id===me} onReady={setLiveReady} onStartMission={()=>{if(!startLiveMission(mission.id,members.map(item=>item.user_id),{shipId,design})){setStatus(t('No se puede iniciar aún: conecta a todos, confirma los roles y espera a que todos estén preparados.','The mission is not ready: connect everyone, confirm roles, and wait until all players are ready.'));}}} />}
  {status && <p role="status" className="systems-warning">{status}</p>}
  </section>;
 }
@@ -120,6 +122,27 @@ function LiveTeamPanel({ language, me, live }: { language: 'en' | 'es'; me?: str
   {live.error&&<p role="status" className="systems-warning">{live.error}</p>}
   <div className="live-chat" role="log" aria-live="polite" aria-label={t('Mensajes del equipo','Team messages')}>{live.messages.map(message=><p key={message.id}><b>{message.displayName}</b><small> · {message.role}</small><br/>{message.text}</p>)}</div>
   <form className="live-chat-compose" onSubmit={event=>{event.preventDefault();if(sendLiveMessage(draft))setDraft('');}}><label className="visually-hidden" htmlFor="live-team-message">{t('Mensaje para el equipo','Message to team')}</label><input id="live-team-message" maxLength={240} value={draft} onChange={event=>setDraft(event.target.value)} placeholder={t('Mensaje breve…','Short message…')} /><button className="systems-secondary" disabled={!live.connected||!draft.trim()}>{t('ENVIAR','SEND')}</button></form>
+ </section>;
+}
+
+function MissionLaunchPanel({ language, me, live, members, mission, isHost, onReady, onStartMission }: { language: 'en' | 'es'; me?: string; live: LiveSnapshot; members: Member[]; mission: Mission; isHost: boolean; onReady: (ready: boolean) => void; onStartMission: () => void }) {
+ const t=(es:string,en:string)=>language==='es'?es:en;
+ const byId=new Map(live.players.map(player=>[player.userId,player]));
+ const roles=new Set(['planning','engineering','science','communications']);
+ const allConnected=members.length>0&&members.every(member=>byId.has(member.user_id));
+ const rolesAssigned=members.length>0&&members.every(member=>roles.has(member.role));
+ const allReady=members.length>0&&members.every(member=>byId.get(member.user_id)?.ready===true);
+ const canStart=live.connected&&isHost&&allConnected&&rolesAssigned&&allReady&&Boolean(mission.id);
+ const self=me?byId.get(me):undefined;
+ const roleName=(role:string)=>({planning:t('PLANIFICACIÓN','PLANNING'),engineering:t('INGENIERÍA','ENGINEERING'),science:t('CIENCIA','SCIENCE'),communications:t('COMUNICACIONES','COMMUNICATIONS')} as Record<string,string>)[role]??t('SIN ROL','NO ROLE');
+ const goal=(role:string)=>({planning:t('Coordinar la ruta de exploración','Coordinate the exploration route'),engineering:t('Mantener operativos los sistemas y el rover','Keep spacecraft systems and rover operational'),science:t('Analizar el terreno y recolectar muestras','Survey terrain and collect samples'),communications:t('Transmitir los datos de misión','Transmit mission data')} as Record<string,string>)[role]??t('Asigna una responsabilidad','Assign a responsibility');
+ return <section className="mission-launch-panel" aria-label={t('Preparación de misión cooperativa','Cooperative mission preparation')}>
+  <header><div><span>COOPERATIVE MULTIPLAYER</span><h2>{t('Preparar misión cooperativa','Prepare cooperative mission')}</h2></div><strong>{t('MISIÓN','MISSION')}: {mission.name}</strong></header>
+  <p>{t('Todos los integrantes deben estar conectados, tener un rol y confirmar que están preparados.', 'Every team member must be connected, assigned a role, and confirm readiness.')}</p>
+  <ul>{members.map(member=>{const player=byId.get(member.user_id);const label=!player?t('DESCONECTADO','DISCONNECTED'):player.ready?t('PREPARADO','READY'):t('NO PREPARADO','NOT READY');return <li key={member.user_id} className={!player?'offline':player.ready?'ready':''}><span className="launch-avatar">{(player?.displayName??member.user_id.slice(0,2)).slice(0,2).toUpperCase()}</span><span className="launch-member"><b>{player?.displayName??member.user_id.slice(0,8)}{member.user_id===me?` · ${t('TÚ','YOU')}`:''}</b><small>{roleName(member.role)} · {goal(member.role)}</small></span><strong>{label}</strong></li>;})}</ul>
+  <div className="launch-checks"><span className={allConnected?'passed':''}>{t('Conectados','Connected')} {members.filter(member=>byId.has(member.user_id)).length}/{members.length}</span><span className={rolesAssigned?'passed':''}>{t('Roles asignados','Roles assigned')}</span><span className={allReady?'passed':''}>{t('Todos preparados','Everyone ready')}</span></div>
+  <div className="mission-launch-actions">{self&&<button className="systems-secondary" disabled={!live.connected} aria-pressed={self.ready} onClick={()=>onReady(!self.ready)}>{self.ready?t('CANCELAR PREPARACIÓN','CANCEL READY'):t('ESTOY PREPARADO','I’M READY')}</button>}<button className="systems-primary" disabled={!canStart} aria-disabled={!canStart} onClick={onStartMission}>{t('INICIAR MISIÓN','START MISSION')} →</button></div>
+  {!isHost&&<small>{t('Solo el anfitrión puede iniciar.','Only the host can start the mission.')}</small>}
  </section>;
 }
 

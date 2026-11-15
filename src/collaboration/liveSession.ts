@@ -8,8 +8,8 @@ import type { TransitState } from '../systems/transit';
 
 export type LiveActivity = 'idle' | 'walk' | 'run' | 'interact' | 'aboard';
 export type LivePose = { x: number; y: number; z: number; yaw: number; activity: LiveActivity; mode: 'system' | 'flight' | 'orbit' | 'surface' };
-export type LiveWorldState = { missionId: string; screen: 'home' | 'mission' | 'engineering' | 'transit' | 'exploration'; updatedAt: number; routeUpdatedAt: number; shipId?: ShipId; design?: MissionDesign | null; arrival?: TransitState | null; transitState?: TransitState | null; transitStarted?: boolean; transitRate?: number };
-export type LivePlayer = { userId: string; displayName: string; role: string; isHost: boolean; pose: LivePose; worldState: LiveWorldState | null };
+export type LiveWorldState = { missionId: string; screen: 'home' | 'mission' | 'engineering' | 'transit' | 'exploration'; updatedAt: number; routeUpdatedAt: number; launchId?: string; launchAt?: number; shipId?: ShipId; design?: MissionDesign | null; arrival?: TransitState | null; transitState?: TransitState | null; transitStarted?: boolean; transitRate?: number };
+export type LivePlayer = { userId: string; displayName: string; role: string; isHost: boolean; ready: boolean; pose: LivePose; worldState: LiveWorldState | null };
 export type LiveMessage = { id: string; userId: string; displayName: string; role: string; text: string; sentAt: number };
 export type LiveSnapshot = { connected: boolean; teamId: string | null; selfId: string | null; hostId: string | null; players: LivePlayer[]; worldState: LiveWorldState | null; messages: LiveMessage[]; error: string };
 
@@ -18,8 +18,9 @@ const empty: LiveSnapshot = { connected: false, teamId: null, selfId: null, host
 let snapshot = empty;
 let channel: RealtimeChannel | null = null;
 let connectionGeneration = 0;
-let identity: Omit<LivePlayer, 'pose' | 'worldState'> | null = null;
+let identity: Omit<LivePlayer, 'pose' | 'worldState' | 'ready'> | null = null;
 let pose: LivePose = initialPose;
+let ready = false;
 let worldState: LiveWorldState | null = null;
 let lastPoseSent = 0;
 let lastChatSent = 0;
@@ -72,6 +73,8 @@ function validWorld(value: unknown): value is LiveWorldState {
   const validDesign = state.design === undefined || state.design === null || parseDesignSnapshot(JSON.stringify({ version: 1, missionId: state.missionId, design: state.design }), state.missionId) !== null;
   return typeof state.screen === 'string' && screens.has(state.screen)
     && Number.isFinite(state.updatedAt) && Number.isFinite(state.routeUpdatedAt)
+    && (state.launchId === undefined || typeof state.launchId === 'string')
+    && (state.launchAt === undefined || Number.isFinite(state.launchAt))
     && (state.shipId === undefined || ['pioneer', 'swift', 'atlas'].includes(state.shipId))
     && validDesign && (state.arrival === undefined || validTransit(state.arrival))
     && (state.transitState === undefined || validTransit(state.transitState))
@@ -86,7 +89,7 @@ function membersFromPresence() {
   for (const values of Object.values(state)) {
     const meta = values[values.length - 1] as Record<string, unknown> | undefined;
     if (!meta || typeof meta.userId !== 'string' || typeof meta.displayName !== 'string' || typeof meta.role !== 'string' || typeof meta.isHost !== 'boolean' || !validPose(meta.pose)) continue;
-    players.push({ userId: meta.userId, displayName: meta.displayName.slice(0, 48), role: meta.role, isHost: meta.isHost, pose: meta.pose, worldState: validWorld(meta.worldState) ? meta.worldState : null });
+    players.push({ userId: meta.userId, displayName: meta.displayName.slice(0, 48), role: meta.role, isHost: meta.isHost, ready: meta.ready === true, pose: meta.pose, worldState: validWorld(meta.worldState) ? meta.worldState : null });
   }
   const hostState = players.find((player) => player.isHost)?.worldState ?? null;
   return { players: players.slice(0, 4), hostState };
@@ -94,7 +97,7 @@ function membersFromPresence() {
 
 async function trackPresence() {
   if (!channel || !identity) return;
-  const result = await channel.track({ ...identity, pose, worldState });
+  const result = await channel.track({ ...identity, ready, pose, worldState });
   if (result !== 'ok' && snapshot.connected) publish({ ...snapshot, error: 'Realtime presence could not be updated.' });
 }
 
@@ -108,6 +111,7 @@ export async function connectLiveTeam(input: { teamId: string; userId: string; d
   if (!cloudClient) return;
   identity = { userId: input.userId, displayName: input.displayName.trim().slice(0, 48) || 'Explorer', role: input.role, isHost: input.hostId === input.userId };
   pose = initialPose;
+  ready = false;
   worldState = null;
   lastPoseSent = 0;
   const next = cloudClient.channel(`orbital-team:${input.teamId}`, { config: { private: true, presence: { key: input.userId } } });
@@ -162,6 +166,27 @@ export function setLivePose(next: LivePose) {
   if (now - lastPoseSent < 80) return;
   lastPoseSent = now;
   void trackPresence();
+}
+
+export function setLiveReady(next: boolean) {
+  if (!channel || !snapshot.connected) return;
+  ready = next;
+  lastPoseSent = 0;
+  void trackPresence();
+}
+
+export function startLiveMission(missionId: string, expectedMemberIds: string[], options: { shipId?: ShipId; design?: MissionDesign | null } = {}) {
+  const required = [...new Set(expectedMemberIds)];
+  const players = snapshot.players;
+  const roles = new Set(['planning', 'engineering', 'science', 'communications']);
+  if (!channel || !identity?.isHost || !snapshot.connected || !missionIds.has(missionId) || required.length < 1 || required.length > 4) return false;
+  if (required.length !== players.length || required.some((id) => !players.some((player) => player.userId === id && player.ready && roles.has(player.role)))) return false;
+  const now = Date.now();
+  worldState = { missionId, screen: 'exploration', updatedAt: now, routeUpdatedAt: now, launchId: crypto.randomUUID(), launchAt: now + 2400, shipId: options.shipId, design: options.design ?? null, arrival: null, transitState: null, transitStarted: false, transitRate: 0 };
+  publish({ ...snapshot, worldState });
+  void trackPresence();
+  void channel.send({ type: 'broadcast', event: 'world-state', payload: { senderId: identity.userId, state: worldState } });
+  return true;
 }
 
 export function publishLiveWorldState(missionId: string, screen: LiveWorldState['screen'], options: { shipId?: ShipId; design?: MissionDesign | null; arrival?: TransitState | null } = {}) {

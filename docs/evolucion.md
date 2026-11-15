@@ -10,7 +10,9 @@ Se conservaron las escenas y mecánicas existentes. `src/collaboration/liveSessi
 
 Para activarlo en Supabase después de la migración de colaboración, ejecutar `supabase/migrations/202611150003_realtime_multiplayer.sql`. La política autoriza el canal `orbital-team:<UUID>` solo a integrantes autenticados del equipo. El máximo de cuatro ya se valida en la transacción de unión existente. Configurar las variables `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY` para Pages o sus equivalentes `VITE_*` para desarrollo, según `supabase-setup.md`.
 
-Este avance sincroniza presencia, movimiento de avatares, chat y navegación/fase de misión, pero no sincroniza como estado canónico la física del vuelo, temporizador de tránsito, recursos, decisiones, escaneos, muestras ni progreso. Esos sistemas siguen ejecutándose en cada cliente. Por tanto, todavía no debe describirse como una simulación de vuelo autoritativa única. Requiere activar y revisar la migración, los permisos Realtime y dos cuentas reales en el proyecto Supabase antes de invitar jugadores.
+El centro de equipos ahora incluye una sala previa al lanzamiento: cada cuenta conectada confirma que está preparada, la interfaz muestra desconectados y roles, y solo el anfitrión puede iniciar cuando todos los miembros están presentes y listos. El inicio transmite misión, nave y diseño, muestra una transición sincronizada y mueve a los integrantes a la escena 3D compartida. Los objetivos del panel son guías por responsabilidad; todavía no bloquean ni autorizan acciones de juego.
+
+Este avance sincroniza presencia, movimiento de avatares, chat, preparación e inicio de misión, y navegación/fase. No sincroniza como estado canónico la física del vuelo, recursos, decisiones, escaneos, muestras ni progreso. Esos sistemas siguen ejecutándose en cada cliente. Por tanto, todavía no debe describirse como una simulación autoritativa única de la partida. Requiere activar y revisar la migración, los permisos Realtime y dos cuentas reales en el proyecto Supabase antes de invitar jugadores.
 
 ## Integración realizada
 

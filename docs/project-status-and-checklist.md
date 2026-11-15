@@ -43,7 +43,7 @@ This is a code-based status record, not a claim of expert validation. “Partial
 
 ## Collaboration and impact
 
-- [~] Accounts, teams, four-player cap and roles use Supabase. Private Realtime presence now carries player identity/role and 3D movement; short team chat and host mission/screen selection are broadcast. The solar-system and exploration scenes render teammate avatars. The `202611150003_realtime_multiplayer.sql` migration and Supabase build configuration must be applied. Transit/resources/progress remain per-client; there is no authoritative shared flight server or synchronized exploration state yet. Competition and verified scores remain unavailable.
+- [~] Accounts, teams, four-player cap and roles use Supabase. Private Realtime presence carries player identity/role, readiness and movement; the team launch gate checks every roster member is connected, assigned a role and ready before the host can start. The launch synchronizes mission, ship/design and transition into the exploration scene. The solar-system and exploration scenes render teammate avatars. The `202611150003_realtime_multiplayer.sql` migration and Supabase build configuration must be applied. Transit/resources/progress remain per-client; there is no authoritative shared flight server or synchronized exploration state yet. Competition and verified scores remain unavailable.
 - [x] Fictional Dominican tracking context, international collaboration narrative and optional device-local learning assessment with consent, export and deletion.
 - [ ] Independent scientific review, accessibility review by specialists and users, real participant studies and verified reach or impact evidence. Local self-selected assessment results do not establish impact.
 
