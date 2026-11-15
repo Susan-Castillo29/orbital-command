@@ -1,0 +1,169 @@
+openapi: 3.1.0
+info:
+  title: ORBITAL GAMIFICATION API
+  version: 1.0.0
+  description: >-
+    API para capacidades, proyectos externos, propuestas educativas deterministas y
+    vistas de lectura. La versión inicial no usa un modelo de IA ni valida afirmaciones científicas.
+servers:
+  - url: https://api.example.org
+    description: Sustituir por el backend de producción.
+security:
+  - bearerApiKey: []
+paths:
+  /api/v1/capabilities:
+    get:
+      security: []
+      summary: Consultar capacidades de plataforma
+      responses:
+        '200':
+          description: Capacidades y estado de persistencia
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [name, version, capabilities]
+                properties:
+                  name: { type: string }
+                  version: { type: string, const: v1 }
+                  persistence: { type: string }
+                  capabilities:
+                    type: array
+                    items: { type: object, required: [id, name, status, description], properties: { id: { type: string }, name: { type: string }, status: { type: string }, description: { type: string } } }
+  /api/v1/templates:
+    get:
+      security: []
+      summary: Listar plantillas
+      responses:
+        '200': { description: Plantillas reutilizables, content: { application/json: { schema: { type: object, properties: { templates: { type: array, items: { $ref: '#/components/schemas/Template' } } } } } }
+  /api/v1/projects:
+    post:
+      summary: Registrar un contexto y generar propuesta
+      description: Publicar requiere visibility=public y publishConsent=true. El borrador privado nunca se comparte automáticamente.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectInput' }
+            example: { name: Observatorio de arrecifes, teamName: Aula Oceánica, description: Proyecto educativo para registrar observaciones marinas y aprender a comunicar evidencia., problem: Cómo analizar observaciones de ecosistemas marinos., objectives: [Registrar observaciones, Explicar límites de las fuentes], audience: Estudiantes, topic: Conservación marina, learningGoals: Diferenciar observaciones de conclusiones., visibility: private }
+      responses:
+        '201': { description: Proyecto persistido y propuesta generada, content: { application/json: { schema: { $ref: '#/components/schemas/ProjectCreated' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+  /api/v1/projects/{projectId}:
+    parameters: [{ $ref: '#/components/parameters/ProjectId' }]
+    get:
+      summary: Recuperar proyecto propio
+      responses:
+        '200': { description: Proyecto, content: { application/json: { schema: { $ref: '#/components/schemas/Preview' } } } }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/v1/projects/{projectId}/proposal:
+    parameters: [{ $ref: '#/components/parameters/ProjectId' }]
+    post:
+      summary: Regenerar propuesta
+      responses:
+        '200': { description: Propuesta estructurada, content: { application/json: { schema: { type: object, required: [projectId, proposal], properties: { projectId: { type: string, format: uuid }, proposal: { $ref: '#/components/schemas/Proposal' } } } } } }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/v1/projects/{projectId}/preview:
+    parameters: [{ $ref: '#/components/parameters/ProjectId' }]
+    post:
+      summary: Crear o renovar enlace unlisted de solo lectura
+      responses:
+        '200': { description: URL compartible; el token solo se entrega una vez, content: { application/json: { schema: { type: object, required: [projectId, visibility, url], properties: { projectId: { type: string, format: uuid }, visibility: { const: unlisted }, url: { type: string, format: uri } } } } } }
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/v1/projects/{projectId}/share:
+    parameters: [{ $ref: '#/components/parameters/ProjectId' }]
+    delete:
+      summary: Revocar enlace y volver privado
+      responses:
+        '200': { description: Enlace revocado }
+        '401': { $ref: '#/components/responses/Error' }
+  /api/v1/projects/{projectId}/visibility:
+    parameters: [{ $ref: '#/components/parameters/ProjectId' }]
+    patch:
+      summary: Cambiar visibilidad del proyecto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [visibility], properties: { visibility: { enum: [private, public] }, publishConsent: { type: boolean } } }
+      responses:
+        '200': { description: Visibilidad modificada }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+  /api/v1/previews/{projectId}:
+    get:
+      security: []
+      summary: Recuperar vista pública o vista unlisted con token
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - { name: token, in: query, required: false, schema: { type: string, maxLength: 128 } }
+      responses:
+        '200': { description: Vista filtrada sin el token interno, content: { application/json: { schema: { $ref: '#/components/schemas/Preview' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/Error' }
+  /mcp:
+    post:
+      summary: MCP Streamable HTTP con respuestas JSON
+      description: POST requiere Accept application/json, text/event-stream. GET SSE no está habilitado y responde 405. tools/call de escritura requiere Bearer API key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [jsonrpc, method], properties: { jsonrpc: { const: '2.0' }, id: { oneOf: [{ type: string }, { type: integer }] }, method: { type: string }, params: { type: object } } }
+            example: { jsonrpc: '2.0', id: 1, method: 'tools/list' }
+      responses:
+        '200': { description: Respuesta JSON-RPC }
+        '202': { description: Notificación aceptada }
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { description: Origin inválido }
+        '405': { description: GET SSE no habilitado }
+        '406': { description: Accept requerido }
+components:
+  securitySchemes:
+    bearerApiKey: { type: http, scheme: bearer, bearerFormat: ORBITAL_API_KEY }
+  parameters:
+    ProjectId: { name: projectId, in: path, required: true, schema: { type: string, format: uuid } }
+  schemas:
+    ProjectInput:
+      type: object
+      additionalProperties: false
+      required: [name, teamName, description, problem, objectives, audience, topic, learningGoals, visibility]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        teamName: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, minLength: 25, maxLength: 5000 }
+        problem: { type: string, minLength: 1, maxLength: 3000 }
+        objectives: { type: array, minItems: 1, maxItems: 8, items: { type: string, maxLength: 300 } }
+        audience: { type: string, minLength: 1, maxLength: 200 }
+        topic: { type: string, minLength: 1, maxLength: 120 }
+        learningGoals: { type: string, minLength: 1, maxLength: 2000 }
+        sourceText: { type: string, maxLength: 65536 }
+        visibility: { enum: [private, public, unlisted] }
+        publishConsent: { type: boolean }
+    ProjectCreated:
+      type: object
+      required: [project]
+      properties:
+        project: { type: object, properties: { id: { type: string, format: uuid }, name: { type: string }, visibility: { type: string }, proposal: { $ref: '#/components/schemas/Proposal' }, createdAt: { type: string, format: date-time } } }
+        shareToken: { type: string, description: Token read-only devuelto una vez cuando se crea directamente un proyecto unlisted. }
+    Preview:
+      type: object
+      required: [id, name, teamName, proposal, preview]
+      properties: { id: { type: string, format: uuid }, name: { type: string }, teamName: { type: string }, description: { type: string }, problem: { type: string }, objectives: { type: array, items: { type: string } }, audience: { type: string }, topic: { type: string }, learningGoals: { type: string }, visibility: { type: string }, proposal: { $ref: '#/components/schemas/Proposal' }, preview: { const: true } }
+    Proposal:
+      type: object
+      required: [version, isAI, title, narrative, missions, roles, missingInformation]
+      properties: { version: { type: string }, isAI: { type: boolean, const: false }, title: { type: string }, narrative: { type: string }, primaryObjective: { type: string }, template: { $ref: '#/components/schemas/Template' }, missions: { type: array, items: { type: object } }, roles: { type: array, items: { type: object } }, learningOutcomes: { type: array, items: { type: string } }, expectedResults: { type: string }, missingInformation: { type: array, items: { type: string } } }
+    Template:
+      type: object
+      required: [id, name]
+      properties: { id: { type: string }, name: { type: string }, description: { type: string } }
+    Error:
+      type: object
+      properties: { error: { type: object, properties: { code: { type: string }, message: { type: string } } } }

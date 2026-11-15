@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { resolve, sep, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { orbitalHandler } from './orbital-platform.mjs';
 const keyed = 'https://api.nasa.gov';
 const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0,10);
 const today = () => daysAgo(0);
@@ -33,6 +34,8 @@ const cache = new Map();
 const requests = new Map();
 const send = (res, status, value) => {res.statusCode=status;res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.end(JSON.stringify(value));};
 export async function nasaHandler(req,res,next=()=>send(res,404,{error:'No encontrado'})) {
+  let route; try { route = new URL(req.url, 'http://localhost').pathname; } catch { return send(res,400,{error:'Solicitud inválida'}); }
+  if (route.startsWith('/api/v1/') || route === '/mcp') return orbitalHandler(req,res,next);
   let request; try {request=new URL(req.url,'http://localhost');} catch {return send(res,400,{error:'Solicitud inválida'});}
   if(request.pathname!=='/api/nasa' && request.pathname!=='/api/nasa/apod-image') return next();
   if(req.method!=='GET') return send(res,405,{error:'Solo se permite GET'});
@@ -80,9 +83,10 @@ if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url))
   try {process.loadEnvFile('.env.local');}catch(error){if(error.code!=='ENOENT')throw error;}
   const root=await realpath(resolve('dist'));const port=Number(process.env.PORT||4175);
   if(!Number.isInteger(port)||port<1024||port>65535)throw Error('Puerto inválido');
-  const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.json':'application/json'};
+  const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.json':'application/json','.yaml':'application/yaml; charset=utf-8'};
+  const host=process.env.HOST||'127.0.0.1';
   createServer((req,res)=>nasaHandler(req,res,async()=>{
     if(!['GET','HEAD'].includes(req.method)){res.writeHead(405).end();return;}
     try {const pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);const candidate=resolve(root,'.'+(pathname==='/'?'/index.html':pathname));const actual=await realpath(candidate);if(!actual.startsWith(root+sep)||(await stat(actual)).isDirectory())throw Error();const bytes=await readFile(actual);res.setHeader('Content-Type',mime[extname(actual)]||'application/octet-stream');res.setHeader('X-Content-Type-Options','nosniff');res.end(req.method==='HEAD'?undefined:bytes);}catch{res.writeHead(404).end();}
-  })).listen(port,'127.0.0.1',()=>console.log(`ORBITAL COMMAND: http://127.0.0.1:${port}`));
+  })).listen(port,host,()=>console.log(`ORBITAL COMMAND: http://${host}:${port}`));
 }

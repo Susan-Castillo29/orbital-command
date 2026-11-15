@@ -20,6 +20,7 @@
     "test:reliability": "node tests/browser-reliability.cjs",
     "test:campaign": "node tests/browser-campaign-legacy.cjs",
     "test:telescope": "node tests/browser-telescope-mode.cjs",
+    "test:developers": "node tests/browser-orbital-developers.cjs",
     "test:exploration-failure": "node tests/browser-exploration-failure.cjs",
     "test:lab-language": "node tests/browser-lab-language.cjs",
     "test:report-language": "node tests/browser-report-language.cjs"

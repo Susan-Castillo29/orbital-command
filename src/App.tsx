@@ -31,6 +31,13 @@ const NASAData = lazy(() => import('./components/NASAData'));
 const CollaborationHub = lazy(() => import('./components/CollaborationHub'));
 const RoleSelection = lazy(() => import('./components/RoleSelection'));
 const TelescopeMission = lazy(() => import('./components/TelescopeMission'));
+const OrbitalDevelopers = lazy(() => import('./components/OrbitalDevelopers'));
+
+type AppScreen = 'home' | 'mission' | 'engineering' | 'transit' | 'exploration' | 'reports' | 'nasa' | 'team' | 'roles' | 'scientist' | 'developers' | 'preview';
+function routeFromHash(): { screen: AppScreen; previewId: string } | null {
+  const match = window.location.hash.match(/^#\/preview\/([0-9a-f-]{36})(?:\?.*)?$/i);
+  return match ? { screen: 'preview', previewId: match[1] } : null;
+}
 
 const cloudConfigured = Boolean(validatePublicConfig(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY));
 const savedMission = typeof window === 'undefined' ? null : readStorage('orbital-command-mission');
@@ -46,7 +53,8 @@ function App() {
   const [mission, setMission] = useState<Mission>(initialMission);
   const liveSession = useLiveSession((value) => value, (left, right) => left.connected === right.connected && left.hostId === right.hostId && left.worldState?.routeUpdatedAt === right.worldState?.routeUpdatedAt);
   const [teamVisited, setTeamVisited] = useState(cloudConfigured);
-  const [screen, setScreen] = useState<'home' | 'mission' | 'engineering' | 'transit' | 'exploration' | 'reports' | 'nasa' | 'team' | 'roles' | 'scientist'>(cloudConfigured ? 'team' : 'home');
+  const [screen, setScreen] = useState<AppScreen>(() => routeFromHash()?.screen ?? (cloudConfigured ? 'team' : 'home'));
+  const [previewId, setPreviewId] = useState(() => routeFromHash()?.previewId ?? '');
   const [design, setDesign] = useState<MissionDesign>(initialDesign);
   const [sharedDesign, setSharedDesign] = useState<MissionDesign | null>(null);
   const [scienceTarget, setScienceTarget] = useState<EonetTarget | null>(() => { try { const value: unknown = JSON.parse(readStorage('orbital-command-eonet-target-v1') ?? 'null'); return isEonetTarget(value) ? value : null; } catch { return null; } });
@@ -109,6 +117,10 @@ function App() {
   }, []);
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'auto' }); }, [screen]);
+  useEffect(() => {
+    const onRoute = () => { const route = routeFromHash(); if (route) { setPreviewId(route.previewId); setScreen('preview'); } else if (window.location.hash === '#developers') setScreen('developers'); else if (window.location.hash === '#home' || !window.location.hash) setScreen('home'); };
+    window.addEventListener('hashchange', onRoute); return () => window.removeEventListener('hashchange', onRoute);
+  }, []);
   useEffect(() => { document.documentElement.lang = language === 'en' ? 'en-GB' : 'es'; writeStorage('orbital-command-language', language); }, [language]);
   useEffect(() => { document.documentElement.dataset.theme = theme; document.documentElement.style.colorScheme = theme; }, [theme]);
 
@@ -216,6 +228,7 @@ function App() {
           <button className={`rail-button ${screen === 'reports' ? 'active' : ''}`} onClick={() => setScreen('reports')} aria-label={t("Informes científicos", "Science reports")} title="Informes científicos"><span>▤</span><small>{t('INFORMES', 'REPORTS')}</small></button>
           <button className={`rail-button ${screen === 'nasa' ? 'active' : ''}`} onClick={() => setScreen('nasa')} aria-label={t("Datos reales de NASA", "NASA data")} title="Datos reales de NASA"><span>◈</span><small>NASA</small></button>
           <button className={`rail-button ${screen === 'team' ? 'active' : ''}`} onClick={() => { setTeamVisited(true); setScreen('team'); }} aria-label={t('Cuentas y equipos', 'Accounts and teams')} title={t('Cuentas y equipos', 'Accounts and teams')}><span>♧</span><small>{t('EQUIPOS', 'TEAMS')}</small></button>
+          <button className={`rail-button ${screen === 'developers' || screen === 'preview' ? 'active' : ''}`} onClick={() => setScreen('developers')} aria-label="ORBITAL DEVELOPERS" title="ORBITAL DEVELOPERS"><span>↗</span><small>DEVELOPERS</small></button>
           <div className="rail-spacer" />
           <button className="rail-button rail-help" aria-label={t("Ayuda", "Help")} title="Ayuda: arrastra para girar, rueda para acercar, clic en un planeta para elegir destino" onClick={() => { setNotice('Consejo: arrastra para girar el sistema, usa la rueda para acercarte y selecciona un planeta con clic.'); window.setTimeout(() => setNotice(''), 5000); }}><span>?</span><small>{t('AYUDA', 'HELP')}</small></button>
           <div id="commander-rail" className="commander-rail" />
@@ -224,7 +237,11 @@ function App() {
 
         <div id="mission-content" className={`mission-content ${screen === 'roles' || screen === 'scientist' ? 'mission-content-role-view' : ''}`} tabIndex={-1}>
         <SceneBoundary key={screen} language={language}><Suspense fallback={<div className="systems-loading" role="status">{t('CARGANDO SISTEMAS DE MISIÓN…', 'LOADING MISSION SYSTEMS…')}</div>}>
-        {screen === 'roles' ? (
+        {screen === 'developers' ? (
+          <OrbitalDevelopers language={language} mode="developers" />
+        ) : screen === 'preview' ? (
+          <OrbitalDevelopers language={language} mode="preview" previewId={previewId} />
+        ) : screen === 'roles' ? (
           <RoleSelection language={language} onChoose={(role) => setScreen(role === 'scientist' ? 'scientist' : 'home')} />
         ) : screen === 'scientist' ? (
           <TelescopeMission language={language} onExit={() => setScreen('roles')} />
@@ -235,6 +252,7 @@ function App() {
               <h1>{t('Tu próxima misión', 'Your next mission')}<br /><em>{t('empieza aquí.', 'starts here.')}</em></h1>
               <p className="intro-copy">{t('Explora el sistema solar. Elige un destino y convierte una pregunta científica en una misión espacial.', 'Explore the solar system. Choose a destination and turn a scientific question into a space mission.')}</p>
               <button type="button" className="role-menu-entry" onClick={() => setScreen('roles')}><span><small>{t('NUEVO · SELECCIÓN DE MISIÓN','NEW · MISSION SELECTION')}</small><b>{t('Elige tu rol de exploración','Choose your role in exploration')}</b></span><i>✳</i><strong>{t('ASTRONAUTA / CIENTÍFICO','ASTRONAUT / SCIENTIST')} ↗</strong></button>
+              <button type="button" className="role-menu-entry developer-home-entry" onClick={() => setScreen('developers')}><span><small>ORBITAL DEVELOPERS</small><b>{t('Conecta una idea científica o educativa','Connect a science or learning project')}</b></span><i>↗</i><strong>{t('EXPLORAR PROYECTO','EXPLORE PROJECT')} ↗</strong></button>
 
               <div className="section-heading"><div><span className="eyebrow">{t('CAMPAÑA CIENTÍFICA', 'SCIENCE CAMPAIGN')}</span><h2>{t('Destinos disponibles ', 'Available destinations ')}<span>{String(availableMissions.length).padStart(2, '0')}</span></h2></div><button className="campaign-records-button" type="button" onClick={openCampaignRecords}>{t('MEDALLAS · ', 'MEDALS · ')}{campaignArchive.medals.length} ↗</button><span className="scroll-hint">{t('SE DESBLOQUEAN AL COMPLETAR CAPÍTULOS', 'UNLOCKED BY COMPLETING CHAPTERS')}</span></div>
               <div className="mission-list" aria-label={t("Misiones disponibles", "Available missions")}>
@@ -302,7 +320,7 @@ function App() {
       </div>
       <footer className="statusbar"><span><i className="live-dot" />{t(' SIMULACIÓN LOCAL', ' LOCAL SIMULATION')}</span><span>ORBITAL COMMAND <i>·</i> BUILD 0.1.0</span><span>EDUCATIONAL MODEL <i>·</i> ALL VALUES APPROXIMATE</span></footer>
       {visualGuide && ((screen === 'home' && (visualGuide === 'select' || visualGuide === 'prepare')) || (screen === 'mission' && visualGuide === 'design') || (screen === 'engineering' && visualGuide === 'confirm')) && <aside className="visual-guide" aria-live="polite"><div><strong>{t('GUÍA VISUAL', 'VISUAL GUIDE')} · {({select: 1, prepare: 2, design: 3, confirm: 4})[visualGuide]}/4</strong><p>{visualGuide === 'select' ? t('Selecciona la misión iluminada para comenzar.', 'Select the highlighted mission to begin.') : visualGuide === 'prepare' ? t('Pulsa Preparar misión para abrir el expediente.', 'Select Prepare mission to open the briefing.') : visualGuide === 'design' ? t('Pulsa Diseñar misión para elegir la nave y los instrumentos.', 'Select Design mission to choose your spacecraft and instruments.') : t('Revisa el diseño y pulsa Confirmar configuración para continuar.', 'Review your design and select Confirm configuration to continue.')}</p></div><button type="button" onClick={finishVisualGuide}>{t('Omitir', 'Skip')}</button></aside>}
-      <Commander mission={mission} screen={screen === 'roles' || screen === 'scientist' ? 'team' : screen} language={language} />
+      <Commander mission={mission} screen={screen === 'roles' || screen === 'scientist' || screen === 'developers' || screen === 'preview' ? 'home' : screen} language={language} />
       {missionLaunch && <div className="mission-launch-overlay" role="status" aria-live="assertive"><div><span>COOPERATIVE MULTIPLAYER · {t('MISIÓN EN EQUIPO','TEAM MISSION')}</span><h1>{t('PREPARANDO EXPEDICIÓN…','PREPARING EXPEDITION…')}</h1><p>{t('SINCRONIZANDO EQUIPO…','SYNCHRONISING TEAM…')}</p><p>{t('INICIANDO MISIÓN…','STARTING MISSION…')}</p></div></div>}
       {notice && <div className="toast" role="status"><span>✓</span>{notice}</div>}
       {campaignDialog && <CampaignCelebration mode={campaignDialog} record={campaignDialog === 'victory' ? campaignRecord : null} archive={campaignArchive} completedMissions={player.completedMissions} language={language} medalSaved={campaignMedalSaved} onRestart={startNewCampaign} onReturnToMain={() => { setCampaignDialog(null); setScreen('home'); }} onClose={() => setCampaignDialog(null)} onUpdateCommander={updateCommanderName} onListen={listenToCampaignMessage} />}

@@ -48,6 +48,7 @@ jobs:
           VITE_NASA_MODE: snapshot
           VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          VITE_ORBITAL_PLATFORM_API_URL: ${{ vars.ORBITAL_PLATFORM_API_URL }}
         run: npm run build
       - name: Test mission systems
         run: npm test

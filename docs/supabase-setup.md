@@ -34,6 +34,10 @@ The fourth migration adds a durable team-session row, server heartbeat and stale
 - `tests/browser-collaboration.cjs` exercises two browser contexts using a mocked Supabase service. Start Vite with `VITE_SUPABASE_URL=https://orbitaltest.supabase.co VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_test npm run dev -- --host 127.0.0.1 --port 4190 --strictPort`, then run `node tests/browser-collaboration.cjs`. The mock does not connect to a real account.
 - Before inviting real users, test confirmation emails, two real accounts, the four-person limit, private backups, role changes, stale-write conflicts, revocation, restoration, cross-device behaviour, rate limits and RLS in the actual project. Review storage, backups, retention, account recovery and security monitoring for the expected deployment.
 
+## External project integration backend
+
+The external ORBITAL Developers API requires a separate Node backend and the new `202611150005_external_gamification_projects.sql` migration. This is not needed for the original game accounts/teams and GitHub Pages cannot execute that backend. See [`orbital-developers.md`](orbital-developers.md) for the server-only `SUPABASE_SERVICE_ROLE_KEY`, per-team `ORBITAL_API_KEYS`, exact CORS origins, REST/MCP routes and deployment steps. Never add the service role key to Pages Actions or a `VITE_*` setting.
+
 ## Global leaderboard and explorer diploma
 
 Run [`supabase/migrations/202611150002_leaderboard.sql`](../supabase/migrations/202611150002_leaderboard.sql) after the collaboration migration to enable the optional top ten. New registrations request a username, first name and first surname; existing users can complete these in Teams. A player must save a private campaign backup before choosing to publish. The public leaderboard displays those profile fields and XP; participation can be withdrawn. Profile changes appear after publishing again. Never place sensitive information in the public name fields.

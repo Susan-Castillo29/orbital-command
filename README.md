@@ -26,6 +26,7 @@ npm run dev
 npm run build
 npm test
 # With the project server and browser test tools running:
+npm run test:developers
 npm run test:impact
 npm run test:accessibility
 ```
@@ -40,6 +41,10 @@ PORT=4175 npm run serve
 ```
 
 GitHub Pages cannot run the intermediary. It displays dated snapshots instead. A GitHub Actions secret named `NASA_API_KEY` can be used to refresh snapshots during a deployment; it does not turn Pages into a live API server. See the [NASA and JPL integration guide](docs/apis-nasa.md) for the catalogue, security boundaries and deployment details.
+
+## ORBITAL DEVELOPERS
+
+The application includes a project-integration area, versioned REST contract, deterministic proposal generator, MCP Streamable HTTP endpoint and branded read-only preview. Persistent cross-device previews require the Node backend and Supabase migration described in the [developer setup guide](docs/orbital-developers.md); the static GitHub Pages site alone cannot store project submissions. The proposal generator is rule based, does not use an AI model and does not validate scientific claims.
 
 ## Gameplay
 
@@ -66,7 +71,9 @@ Planetary sizes and distances are not to scale. Free flight compresses time; tra
 - `src/components/Commander.tsx`, `PlanetaryLab.tsx`, `MissionReports.tsx` and `NASAData.tsx`: guidance, virtual models, reports and external data.
 - `src/systems/engineering.ts`, `transit.ts`, `communications.ts` and `lunarCampaign.ts`: mission design, simulated time, communications and campaign state.
 - `src/data/`: mission, celestial-body and narrative data.
-- `server/nasa-proxy.mjs`: allow-listed server-side intermediary for external scientific data.
+- `server/nasa-proxy.mjs`, `server/orbital-platform.mjs`: server-side NASA intermediary and external-project REST/MCP services.
+- `supabase/migrations/202611150005_external_gamification_projects.sql`: private project storage and revocable preview links.
+- `public/openapi.yaml`, `docs/orbital-developers.md`: REST contract and third-party setup.
 - `public/textures/` and `public/illustrations/`: credited presentation textures and original vector artwork.
 - `tests/`: domain and browser checks.
 - `.github/workflows/pages.yml`: build and GitHub Pages deployment.
@@ -79,10 +86,10 @@ GitHub Actions builds and deploys changes pushed to `main` or `master` when GitH
 
 The language selector defaults to UK English and translates the main navigation, parts of the home screen, and key controls and headings in mission engineering, science reports and the NASA observatory. The remainder of the interface, narration, mission content and API responses are not yet fully translated; selecting Spanish restores the original Spanish labels in the translated areas. This is not yet a complete AAA production. Mission-specific activities, continuous probe descent, the cinematic return, professional voice acting and broad testing on physical devices remain incomplete. The [implementation status](docs/evolucion.md), [initial audit](docs/auditoria-y-plan.md), [observatory review](docs/auditoria-observatorio.md) and [delivery record](docs/entrega-the-last-horizon.md) contain further detail. The [validation protocol](docs/validation-protocol.md) describes voluntary learning evidence and independent review.
 
-The commander supports English and Spanish browser speech synthesis, subject to available browser voices and user activation. A skippable visual guide points to mission selection, preparation, design and configuration; it can be restarted from the commander transmission log. Mission reports provide a debrief based on recorded results. Multiplayer cooperation, competitive play, full exploration sandbox and persistent analysis of exploration failures are not implemented. Failed transit attempts are recorded and explained in Reports. The isolated mission experiment lab previews both valid and invalid designs without changing campaign progress.
+The commander supports English and Spanish browser speech synthesis, subject to available browser voices and user activation. A skippable visual guide points to mission selection, preparation, design and configuration; it can be restarted from the commander transmission log. Mission reports provide a debrief based on recorded results. Team presence, readiness, shared mission phase and visible avatars are available when Supabase and the required migrations are configured; spacecraft physics still run on each client, so this is not a single authoritative flight simulation. Competitive play, a full exploration sandbox and persistent analysis of exploration failures are not implemented. Failed transit attempts are recorded and explained in Reports. The isolated mission experiment lab previews both valid and invalid designs without changing campaign progress.
 
 Mission engineering offers three educational orbital profiles and three transit difficulty settings. Orbital profiles affect launch payload capacity, transit estimates, science data per scan and downlink capacity; the factors are illustrative rather than flight-certified orbit predictions. The selected difficulty changes transit reserves and energy consumption. Exhausted transit energy, zero integrity or an impossible mandatory manoeuvre results in a mission failure, with retry and design review. A design can be saved locally, compared and shared as validated JSON for the same mission. Exploration can fail on zero integrity or critically low energy in a non-surface orbital mission; not every failure scenario is represented. Online accounts, multiplayer and team competition remain unimplemented. Run `npm run test:engineering` for the browser regression (requires Playwright as described above).
 
 For a requirement-by-requirement implementation status, limitations and verification commands, see [project status and checklist](docs/project-status-and-checklist.md).
 
-Accounts, private campaign backup and shared team planning can be connected to Supabase; see [Supabase setup](docs/supabase-setup.md). The service is disabled until configured, and shared 3D flight is not yet implemented.
+Accounts, private campaign backup, shared team planning and cooperative presence require Supabase setup. The external developer API requires its own Node backend configuration, server-only service-role secret, per-team API keys and migration; see [Supabase setup](docs/supabase-setup.md) and [ORBITAL Developers](docs/orbital-developers.md). These cloud services are disabled until configured. The [implementation checklist](docs/project-status-and-checklist.md) separates completed code from production configuration and remaining work.
