@@ -7,7 +7,7 @@ This is a code-based status record, not a claim of expert validation. “Partial
 - [x] Existing React, TypeScript, Vite and Three.js application retained; mission progress and reports use local browser storage.
 - [x] Responsive navigation, light/dark themes, larger controls, full-screen visualisations and a visible skippable mission setup guide.
 - [x] Commander transmissions, browser speech synthesis, replay, speech and subtitle controls, and English/Spanish selection for the commander. Browser voice availability varies.
-- [~] Localisation: English is the default and the principal navigation and some screens are bilingual; destination briefings, transit controls and planetary-lab layer descriptions are bilingual, but many exploration texts, legacy reports, API responses and controls are not fully translated.
+- [~] Localisation: English is the default and the principal navigation and some screens are bilingual; destination briefings, transit controls, planetary-lab layers and known report text are bilingual, but some exploration text, custom historical records, API responses and controls are not fully translated.
 - [~] 3D solar system, spacecraft variants, procedural surface scenes, orbital visualisations, atmospheric/solar models, lighting, exploration controls and synthetic ambience. They are educational approximations, not AAA-quality models or scientifically complete reconstructions.
 - [~] Accessibility: automated checks cover selected views and combinations. Independent assistive-technology testing, human testing and a full WCAG review remain outstanding.
 - [ ] Original cinematic score, professional recorded voice acting, complete launch and landing cinematics, and final campaign return sequence.

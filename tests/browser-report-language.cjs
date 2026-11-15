@@ -1,0 +1,13 @@
+const path=require('node:path'); const fs=require('node:fs'); const assert=require('node:assert/strict');
+const browserTools=path.resolve(__dirname,'../../../../../infraestructura/herramientas-locales/browser'); process.env.PLAYWRIGHT_BROWSERS_PATH ||= path.join(browserTools,'browsers');
+const {chromium}=require(process.env.ORBITAL_PLAYWRIGHT_MODULE||path.join(browserTools,'node_modules/playwright'));
+const url=process.env.ORBITAL_TEST_URL||'http://127.0.0.1:4174/';
+(async()=>{const browser=await chromium.launch({headless:true,args:['--enable-unsafe-swiftshader']});try{
+ const context=await browser.newContext({viewport:{width:1440,height:900}});
+ await context.addInitScript(()=>{localStorage.setItem('orbital-command-operations-guide-v1','done');localStorage.setItem('orbital-command-visual-guide-v1','done');localStorage.setItem('orbital-command-reports-v1',JSON.stringify([{missionId:'earth',missionName:'EARTH GUARDIAN',destination:'Tierra',objective:'Medir cambios en nubes y cobertura vegetal.',instrument:'Cámara multiespectral',observations:[{region:'Corteza',value:30,unit:'índice simulado / 100'}],samples:[],transmittedUnits:8,fuelRemaining:80,energyRemaining:90,integrity:95,elapsedDays:2,score:80,significance:'Observar nubes, océanos y vegetación ayuda a formular preguntas sobre cambios ambientales en nuestro planeta.',source:'https://science.nasa.gov/earth/',netFuelUsed:5,netEnergyUsed:10}]));});
+ const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(url,{waitUntil:'networkidle'});await page.getByRole('button',{name:'Science reports'}).click();
+ await page.getByRole('heading',{name:'Earth · EARTH GUARDIAN'}).waitFor();await page.getByText('Measure changes in cloud cover and vegetation.').waitFor();
+ const [en]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'DOWNLOAD REPORT'}).click()]); const english=fs.readFileSync(await en.path(),'utf8');assert.match(english,/SIMULATED REPORT/);assert.match(english,/Multispectral camera/);assert.match(english,/Net reserve change: fuel 5%; energy 10%/);
+ await page.getByLabel('Language').selectOption('es');const [es]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'DESCARGAR INFORME'}).click()]);const spanish=fs.readFileSync(await es.path(),'utf8');assert.match(spanish,/INFORME SIMULADO/);assert.match(spanish,/Variación neta de reservas/);assert.deepEqual(errors,[]);
+ await context.close();console.log('Bilingual scientific report and download');
+}finally{await browser.close();}})().catch(error=>{console.error(error);process.exit(1)});
