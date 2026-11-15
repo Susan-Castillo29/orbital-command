@@ -4,6 +4,14 @@ Estado y verificaciones: 12 de noviembre de 2026. Este documento actualiza la [a
 
 La [revisión del observatorio](auditoria-observatorio.md) añade atlas SVG, selección de voz, control de calidad gráfica y correcciones de interacción.
 
+## Multijugador cooperativo en tiempo real — avance inicial
+
+Se conservaron las escenas y mecánicas existentes. `src/collaboration/liveSession.ts` abre un canal privado por equipo usando Supabase Realtime: Presence lleva rol, nombre, conexión, posición y animación de cada jugador; Broadcast transmite mensajes breves y la misión/fase de pantalla elegida por el anfitrión. Las escenas solares y de exploración dibujan avatares 3D etiquetados por nombre y responsabilidad. En la vista solar se puede caminar, correr, interactuar y abordar; la escena de exploración muestra las poses de los compañeros dentro del mismo destino. El chat del centro de equipos es de texto.
+
+Para activarlo en Supabase después de la migración de colaboración, ejecutar `supabase/migrations/202611150003_realtime_multiplayer.sql`. La política autoriza el canal `orbital-team:<UUID>` solo a integrantes autenticados del equipo. El máximo de cuatro ya se valida en la transacción de unión existente. Configurar las variables `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY` para Pages o sus equivalentes `VITE_*` para desarrollo, según `supabase-setup.md`.
+
+Este avance sincroniza presencia, movimiento de avatares, chat y navegación/fase de misión, pero no sincroniza como estado canónico la física del vuelo, temporizador de tránsito, recursos, decisiones, escaneos, muestras ni progreso. Esos sistemas siguen ejecutándose en cada cliente. Por tanto, todavía no debe describirse como una simulación de vuelo autoritativa única. Requiere activar y revisar la migración, los permisos Realtime y dos cuentas reales en el proyecto Supabase antes de invitar jugadores.
+
 ## Integración realizada
 
 - El proyecto Git conserva los seis commits y las ramas remotas del origen. La rama local tiene cambios sin publicar. El gestor local lo inicia desde el puerto preferido 4174; Vite escucha en `127.0.0.1` y utiliza el puerto asignado por el gestor.
@@ -53,3 +61,4 @@ La prueba usa el Playwright y Chromium de `infraestructura/herramientas-locales/
 La compilación y las pruebas unitarias pasan. La regresión de navegador cubre la misión terrestre y el desbloqueo de Luna, aterrizaje y caminata en Luna y Marte, la fase final lunar con muestras preparadas y la sonda atmosférica de Venus. También revisa el acceso a los otros destinos mediante trayectos guardados de prueba, incluidos los rovers de Mercurio y Titán y los laboratorios remotos. No equivale a completar todos los capítulos. Se comprobó la pantalla de ingeniería a 390 × 844 y una compilación de producción en navegador. El resultado más reciente de `npm audit` no reportó vulnerabilidades conocidas; esto es una comprobación puntual, no una garantía de seguridad.
 
 El workflow fija las acciones a SHA, reduce permisos del trabajo de despliegue y pasa `actionlint`. El sitio estático incorpora una CSP mediante meta en producción; no reemplaza cabeceras de servidor como HSTS o protección contra enmarcado, que dependen del proveedor de alojamiento. No se ha publicado ningún cambio.
+

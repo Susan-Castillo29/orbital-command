@@ -6,6 +6,7 @@ import { playSound } from '../systems/audio';
 import { englishDestinations } from '../data/commander';
 import { clearTransit, loadTransit, saveTransit } from '../systems/transitStorage';
 import { makeFailedAttempt, saveFailedAttempt } from '../systems/missionAttempts';
+import { publishLiveTransit, useLiveSession } from '../collaboration/liveSession';
 import './mission-systems.css';
 
 type Props = { mission: Mission; design: MissionDesign; onArrive: (state: TransitState) => void; onCancel: () => void; language: 'en' | 'es' };
@@ -16,6 +17,8 @@ const dayFormat = (day: number, language: 'en' | 'es') => day < 1 ? day.toFixed(
 
 export default function MissionTransit({ mission, design, onArrive, onCancel, language }: Props) {
   const t = (es: string, en: string) => language === 'es' ? es : en;
+  const live = useLiveSession((value) => value, (left, right) => left.connected === right.connected && left.selfId === right.selfId && left.hostId === right.hostId && left.worldState?.updatedAt === right.worldState?.updatedAt);
+  const isFollower = live.connected && live.hostId !== null && live.selfId !== live.hostId;
   const [saved] = useState(() => loadTransit(mission, design));
   const attemptId = useRef(saved?.attemptId ?? newAttemptId());
   const [failureSaved, setFailureSaved] = useState(true);
@@ -28,7 +31,13 @@ export default function MissionTransit({ mission, design, onArrive, onCancel, la
   const milestones = useRef(new Set<number>());
   const profile = transitProfiles[mission.id] ?? transitProfiles.mars;
   const destination = language === 'en' ? englishDestinations[mission.id] ?? mission.destination : mission.destination;
-  useEffect(() => { if (started) saveTransit(mission.id, design, launchDay, state, attemptId.current); }, [started, mission.id, design, launchDay, state]);
+  useEffect(() => { if (started && !isFollower) saveTransit(mission.id, design, launchDay, state, attemptId.current); }, [started, mission.id, design, launchDay, state, isFollower]);
+  useEffect(() => {
+    const shared = live.worldState;
+    if (!isFollower || shared?.screen !== 'transit' || shared.missionId !== mission.id || !shared.transitState) return;
+    setState(shared.transitState); setStarted(Boolean(shared.transitStarted)); setRate(shared.transitRate ?? 0); setCountdown(null);
+  }, [isFollower, live.worldState?.updatedAt, live.worldState?.missionId, live.worldState?.screen, mission.id]);
+  useEffect(() => { if (!isFollower && live.connected && live.selfId === live.hostId) publishLiveTransit(state, started, rate); }, [isFollower, live.connected, live.selfId, live.hostId, state, started, rate]);
   useEffect(() => {
     if (countdown === null) return;
     if (countdown === 0) {
@@ -53,7 +62,7 @@ export default function MissionTransit({ mission, design, onArrive, onCancel, la
     }
   }, [started, state]);
   useEffect(() => {
-    if (!started || rate === 0 || transitFailure(state) || state.decision === 'required' || state.elapsedDays >= state.durationDays) return;
+    if (isFollower || !started || rate === 0 || transitFailure(state) || state.decision === 'required' || state.elapsedDays >= state.durationDays) return;
     last.current = performance.now();
     const timer = window.setInterval(() => {
       const now = performance.now();
@@ -62,7 +71,7 @@ export default function MissionTransit({ mission, design, onArrive, onCancel, la
       setState((previous) => advanceTransit(previous, seconds * rate / 24, design));
     }, 200);
     return () => window.clearInterval(timer);
-  }, [started, rate, state.decision, state.elapsedDays >= state.durationDays, transitFailure(state), design]);
+  }, [isFollower, started, rate, state.decision, state.elapsedDays >= state.durationDays, transitFailure(state), design]);
   const progress = Math.min(1, state.elapsedDays / state.durationDays);
   const failure = started ? transitFailure(state) : null;
   useEffect(() => { if (failure) setFailureSaved(saveFailedAttempt(makeFailedAttempt(attemptId.current, mission, design, state, failure))); }, [failure, mission, design, state]);
@@ -80,4 +89,5 @@ export default function MissionTransit({ mission, design, onArrive, onCancel, la
     </div>
   </section>;
 }
+
 

@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 32259)
+Total output lines: 1691
+
 import { orbitProfiles } from '../systems/engineering';
 import { localiseMission } from '../data/missionLocale';
 import FullscreenControl from './FullscreenControl';
@@ -34,6 +37,8 @@ import { compressedTransmissionSeconds, estimatedSignalSeconds } from '../system
 import { isSimulatedDustStorm } from '../systems/weather';
 import { isEonetTarget, type EonetTarget } from '../systems/eonet';
 import { addBufferedData, emptyDataBuffers, totalBuffered, transmitBufferedData, type DataBuffers, type DataKind } from '../systems/dataBuffers';
+import { getLiveSnapshot, setLivePose, subscribeLiveSnapshot, type LivePlayer, type LivePose } from '../collaboration/liveSession';
+import { createPlayerAvatar, disposeAvatar, type AvatarRig } from './SolarSystemScene';
 
 type Mode = 'flight' | 'orbit' | 'surface';
 type PointOfInterest = { object: THREE.Group; kind: 'rock' | 'station'; index: number; name: string; position: THREE.Vector3 };
@@ -570,6 +575,28 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
     surface.setZone(progress.landingZone ?? landingZoneId);
     surface.root.visible = false;
     scene.add(surface.root);
+    const teamAvatarLayer = new THREE.Group(); scene.add(teamAvatarLayer);
+    const teamAvatars = new Map<string, { rig: AvatarRig; role: string; name: string }>();
+    let teamPlayers: LivePlayer[] = [];
+    let liveSelfId: string | null = null;
+    let interactionUntil = 0;
+    const refreshTeamAvatars = () => {
+      const live = getLiveSnapshot(); teamPlayers = live.players; liveSelfId = live.selfId;
+      teamAvatarLayer.visible = live.connected;
+      for (const player of teamPlayers) {
+        if (player.userId === liveSelfId || player.pose.mode === 'system') continue;
+        let avatar = teamAvatars.get(player.userId);
+        if (!avatar || avatar.role !== player.role || avatar.name !== player.displayName) {
+          if (avatar) { teamAvatarLayer.remove(avatar.rig.root); disposeAvatar(avatar.rig); }
+          const rig = createPlayerAvatar(player); avatar = { rig, role: player.role, name: player.displayName };
+          teamAvatars.set(player.userId, avatar); teamAvatarLayer.add(rig.root);
+        }
+      }
+      const connected = new Set(teamPlayers.filter((player) => player.userId !== liveSelfId && player.pose.mode !== 'system').map((player) => player.userId));
+      for (const [id, avatar] of teamAvatars) if (!connected.has(id)) { teamAvatarLayer.remove(avatar.rig.root); disposeAvatar(avatar.rig); teamAvatars.delete(id); }
+    };
+    const unsubscribeTeamPresence = subscribeLiveSnapshot(refreshTeamAvatars);
+    refreshTeamAvatars();
     const sensorGroup = new THREE.Group(); surface.root.add(sensorGroup);
     const createSensor = (position: SurfaceSensor) => {
       const sensor = new THREE.Group();
@@ -581,748 +608,7 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
 
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
-    const keys = new Set<string>();
-    const shipForward = new THREE.Vector3();
-    const desiredCamera = new THREE.Vector3();
-    const lookTarget = new THREE.Vector3();
-    const orbitCenter = new THREE.Vector3();
-    let modeNow: Mode = 'flight';
-    let selectedNow = mission.targetBodyId;
-    let hovered: BodyRuntime | undefined;
-    let dragStart: { x: number; y: number; yaw: number; pitch: number } | undefined;
-    let dragged = false;
-    let yaw = Math.PI;
-    let pitch = 0;
-    let orbitYaw = 0.5;
-    let orbitPitch = 0.28;
-    let orbitDistance = 5;
-    let viewDistance = 7;
-    let routeTarget: THREE.Vector3 | undefined;
-    const routeWaypoints: THREE.Vector3[] = [];
-    let routeBody: string | undefined;
-    let autopilot = false;
-    const flightVelocity = new THREE.Vector3();
-    const initialRadial = new THREE.Vector3(ship.position.x, 0, ship.position.z).normalize();
-    const initialOrbitalSpeed = Math.sqrt(24 / Math.max(Math.hypot(ship.position.x, ship.position.z), SOLAR_EXCLUSION_RADIUS));
-    flightVelocity.set(-initialRadial.z, 0, initialRadial.x).multiplyScalar(initialOrbitalSpeed);
-    let currentProgress: LunarProgress = { ...progress };
-    let currentSurvey: OrbitalSurvey = { ...orbitalSurvey };
-    let currentResources: ExplorationResources = { ...resources };
-    let currentRecordedTarget = recordedTarget;
-    let currentBuffers: DataBuffers = { ...buffers };
-    let currentLabReadings = [...labReadings];
-    let currentPhotoCount = photoCount;
-    let currentSensors = [...sensors];
-    let currentSatelliteDeployed = satelliteDeployed;
-    let currentEvents = loadMissionEvents(mission.id);
-    let stormNow = false;
-    let nextWindowAt = 0;
-    let stationNearby = false;
-    let onFootNow = false;
-    const activeVehicle = () => onFootNow ? surface.astronaut : surface.rover;
-    let lastHudUpdate = 0;
-    let lastGuideUpdate = 0;
-    let currentSpeed = 0;
-    let landingSequence: { start: THREE.Vector3; end: THREE.Vector3; elapsed: number; zoneId: string } | null = null;
-    let toastTimer = 0;
-    let acquisitionTimer = 0;
-    const clock = new THREE.Clock();
-
-    const setMessageForSeconds = (text: string) => {
-      setMessage(text);
-      window.clearTimeout(toastTimer);
-      toastTimer = window.setTimeout(() => setMessage(''), 4300);
-    };
-    const matchedTarget = () => mission.id === 'earth' && scienceTarget && currentRecordedTarget && scienceTarget.id === currentRecordedTarget.id && scienceTarget.retrievedAt === currentRecordedTarget.retrievedAt ? currentRecordedTarget : null;
-    const getRegions = () => { const regions = [...(orbitalRegions[mission.id] ?? ['Sector norte', 'Sector ecuatorial', 'Sector sur'])]; if (mission.id === 'earth' && scienceTarget && (!currentSurvey.scannedRegions.includes(0) || matchedTarget())) regions[0] = `EONET: ${scienceTarget.title}`; return regions; };
-    const awardCompletion = () => {
-      if (currentResources.integrity <= 0) return;
-      const surfaceResults = supportsSurface && currentProgress.transmitted;
-      const regions = surfaceResults
-        ? currentProgress.scannedRocks.map((index) => surface.points[index].name)
-        : currentSurvey.scannedRegions.map((index) => getRegions()[index]);
-      const samples = surfaceResults ? currentProgress.collectedSamples.map((index) => surface.points[index].name) : [];
-      const saved = saveReport(createScienceReport(mission, design, currentResources, regions, samples, currentLabReadings, arrival?.choice ?? null, currentPhotoCount, currentEvents, currentSurvey.scannedRegions.includes(0) ? matchedTarget() : null));
-      if (!saved) setMessageForSeconds('Transmisión completa, pero el navegador no permitió guardar el informe local.');
-      const { progress: updated, awarded } = awardMission(mission.id, mission.reward, Math.round(mission.budget * 0.18));
-      window.dispatchEvent(new CustomEvent('orbital-commander-transmission', { detail: { id: `complete-${mission.id}`, title: 'TRANSMISIÓN RECIBIDA', text: `Buen trabajo. Los datos de ${mission.destination} han llegado al centro de control. Nuestros equipos internacionales podrán revisar el informe y sus limitaciones.` } }));
-      window.dispatchEvent(new CustomEvent('orbital-player-progress', { detail: updated }));
-      if (awarded) { playSound('complete'); setMessageForSeconds(`Recompensa acreditada · +${mission.reward} XP · +${Math.round(mission.budget * 0.18)} CR.`); }
-    };
-    const commitProgress = (patch: Partial<LunarProgress>, notification: string) => {
-      const firstSample = currentProgress.collectedSamples.length === 0 && Boolean(patch.collectedSamples?.length);
-      currentProgress = { ...currentProgress, ...patch };
-      setProgress(currentProgress);
-      saveLunarProgress(mission.id, currentProgress);
-      setMessageForSeconds(notification);
-      if ('scannedRocks' in patch || 'collectedSamples' in patch) playSound('scan');
-      if (firstSample) window.dispatchEvent(new CustomEvent('orbital-commander-transmission', { detail: { id: 'first-sample', title: 'EL PRIMER DESCUBRIMIENTO', text: 'Acabas de convertir una pregunta en una oportunidad para aprender. Puede parecer una pequeña roca, pero cada descubrimiento nos acerca a comprender nuestra historia.' } }));
-    };
-    const commitResources = (patch: Partial<ExplorationResources>) => {
-      if (patch.storage !== undefined && patch.storage > currentResources.storage && patch.energy !== undefined) {
-        setAcquisition({ energy: currentResources.energy - patch.energy, data: (patch.storage - currentResources.storage) * hulls[design.ship].storage / 100 });
-        window.clearTimeout(acquisitionTimer);
-        acquisitionTimer = window.setTimeout(() => setAcquisition(null), 4500);
-        playSound('scan');
-      }
-      currentResources = { ...currentResources, ...patch };
-      setResources(currentResources);
-      saveExplorationResources(mission.id, currentResources);
-    };
-    const commitBuffers = (next: DataBuffers) => {
-      currentBuffers = next;
-      setBuffers(next);
-      writeStorage(`orbital-command-buffers-${mission.id}`, JSON.stringify(next));
-    };
-    const bufferData = (kind: DataKind, amount: number) => commitBuffers(addBufferedData(currentBuffers, kind, amount));
-    if (arrival) commitBuffers(currentBuffers);
-    const commitSurvey = (patch: Partial<OrbitalSurvey>, notification: string) => {
-      currentSurvey = { ...currentSurvey, ...patch };
-      setOrbitalSurvey(currentSurvey);
-      writeStorage(`orbital-command-survey-${mission.id}`, JSON.stringify(currentSurvey));
-      setMessageForSeconds(notification);
-    };
-    const setModeNow = (next: Mode) => {
-      if (modeNow === 'surface' && next !== 'surface' && onFootNow) { setMessageForSeconds('Vuelve al rover antes de abandonar la superficie.'); return; }
-      if (next === 'surface' && (!supportsSurface || !currentProgress.landed || !currentProgress.roverDeployed || selectedNow !== mission.targetBodyId)) {
-        setMessageForSeconds('Descenso bloqueado · establece órbita y selecciona una zona segura para el rover.');
-        return;
-      }
-      const previous = modeNow;
-      if (next === 'orbit') stopEngine();
-      modeNow = next;
-      setMode(next);
-      system.visible = next !== 'surface';
-      sunLight.visible = next !== 'surface';
-      surfaceLight.visible = next === 'surface';
-      surface.root.visible = next === 'surface';
-      scene.background = new THREE.Color(next === 'surface' && mission.id === 'titan' ? '#5b402c' : next === 'surface' && mission.id === 'mars' ? '#69483e' : '#030811');
-      scene.fog = next === 'surface' && mission.id === 'titan' ? new THREE.Fog('#75543a', 12, 65) : next === 'surface' && mission.id === 'mars' ? new THREE.Fog('#69483e', 28, 95) : null;
-      routeLine.visible = next === 'flight' && Boolean(routeTarget);
-      if (next === 'orbit') {
-        const body = bodies.find((item) => item.data.id === selectedNow);
-        const center = selectedNow === 'sun' ? sun.position : body?.group.position;
-        if (center) {
-          orbitCenter.copy(center);
-          orbitDistance = selectedNow === 'sun' ? getSafeOrbitRadius('sun') / 0.78 : Math.max(body?.data.radius ?? 0, 0) + 3.4;
-          if (previous === 'surface') ship.position.set(orbitCenter.x + orbitDistance, orbitCenter.y + 0.4, orbitCenter.z);
-        }
-      }
-    };
-    const getBody = (id: string) => id === 'sun' ? undefined : bodies.find((item) => item.data.id === id);
-    const getBodyPosition = (id: string) => id === 'sun' ? sun.position : getBody(id)?.group.position;
-    const getBodyRadius = (id: string) => id === 'sun' ? 2.15 : getBody(id)?.data.radius ?? 0;
-    const getSafeOrbitRadius = (id: string) => id === 'sun' ? 10.2 : id === 'saturn' ? getBodyRadius(id) * 2.15 + 0.6 : getBodyRadius(id) + 1.45;
-    let activeHazard = '';
-    const reportHazard = (message: string) => {
-      if (activeHazard === message) return;
-      activeHazard = message;
-      setHazardWarning(message);
-    };
-    const checkFlightSafety = (position: THREE.Vector3) => {
-      let closestWarning = '';
-      let closestMargin = Infinity;
-      const solarDistance = position.distanceTo(sun.position);
-      const solarBoundary = SOLAR_EXCLUSION_RADIUS;
-      if (solarDistance < solarBoundary) {
-        reportHazard('LÍMITE SOLAR: acercamiento bloqueado. La zona de calor extremo es inaccesible.');
-        return false;
-      }
-      if (solarDistance < SOLAR_WARNING_RADIUS) {
-        closestMargin = solarDistance - solarBoundary;
-        closestWarning = 'ADVERTENCIA: calor solar alto. Mantén distancia segura del Sol.';
-      }
-      for (const body of bodies) {
-        if (body.data.id === 'asteroid') continue;
-        const distanceToBody = position.distanceTo(body.group.position);
-        const hardBoundary = (body.data.id === 'saturn' ? body.data.radius * 1.9 : body.data.radius) + 0.42;
-        if (distanceToBody < hardBoundary) {
-          reportHazard(`COLISIÓN EVITADA: zona de seguridad de ${body.data.name}. Cambia el rumbo.`);
-          return false;
-        }
-        const margin = distanceToBody - hardBoundary;
-        if (margin < 2.2 && margin < closestMargin) {
-          closestMargin = margin;
-          closestWarning = `ADVERTENCIA: proximidad a ${body.data.name}. Reduce velocidad o modifica el rumbo.`;
-        }
-      }
-      reportHazard(closestWarning);
-      return true;
-    };
-    const createSafeRoute = (bodyId: string) => {
-      const center = getBodyPosition(bodyId);
-      if (!center) return undefined;
-      if (bodyId === 'sun') return new THREE.Vector3(0, 0, getSafeOrbitRadius(bodyId));
-      const body = getBody(bodyId);
-      if (!body) return undefined;
-      return center.clone().add(new THREE.Vector3(0, 0, getSafeOrbitRadius(bodyId)));
-    };
-    const raycastAt = (event: PointerEvent) => {
-      const rect = renderer.domElement.getBoundingClientRect();
-      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(pointer, camera);
-      return raycaster.intersectObjects(clickTargets, false)[0];
-    };
-    const updateHover = (event: PointerEvent) => {
-      if (modeNow === 'surface') return;
-      const hit = raycastAt(event);
-      const id = hit?.object.userData.bodyId as string | undefined;
-      const next = id ? bodies.find((item) => item.data.id === id) : undefined;
-      if (hovered !== next) {
-        if (hovered) hovered.material.emissive.set('#000000');
-        hovered = next;
-        if (hovered) hovered.material.emissive.set(hovered.data.accent);
-      }
-      renderer.domElement.style.cursor = next ? 'pointer' : dragStart ? 'grabbing' : 'crosshair';
-    };
-    const onPointerDown = (event: PointerEvent) => {
-      if (event.button !== 0) return;
-      dragStart = { x: event.clientX, y: event.clientY, yaw: modeNow === 'orbit' ? orbitYaw : modeNow === 'surface' ? surface.rover.rotation.y : yaw, pitch: modeNow === 'orbit' ? orbitPitch : pitch };
-      dragged = false;
-    };
-    const onPointerMove = (event: PointerEvent) => {
-      updateHover(event);
-      if (!dragStart || (event.buttons & 1) === 0) return;
-      const dx = event.clientX - dragStart.x;
-      const dy = event.clientY - dragStart.y;
-      if (Math.hypot(dx, dy) > 5) dragged = true;
-      if (!dragged) return;
-      if (modeNow === 'orbit') {
-        orbitYaw = dragStart.yaw - dx * 0.004;
-        orbitPitch = THREE.MathUtils.clamp(dragStart.pitch + dy * 0.003, -0.95, 1.2);
-      } else if (modeNow === 'surface') {
-        surface.rover.rotation.y = dragStart.yaw - dx * 0.006;
-      } else {
-        yaw = dragStart.yaw - dx * 0.004;
-        pitch = THREE.MathUtils.clamp(dragStart.pitch + dy * 0.003, -1.15, 1.15);
-        ship.rotation.set(pitch, yaw, 0, 'YXZ');
-      }
-    };
-    const onPointerUp = (event: PointerEvent) => {
-      if (!dragStart) return;
-      if (!dragged) {
-        if (modeNow === 'surface') {
-          const rect = renderer.domElement.getBoundingClientRect();
-          pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-          pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-          raycaster.setFromCamera(pointer, camera);
-          const hit = raycaster.intersectObjects(surface.points.map((point) => point.object), true)[0];
-          let object: THREE.Object3D | null = hit?.object ?? null;
-          while (object && !Number.isInteger(object.userData.poiIndex)) object = object.parent;
-          const poiIndex = object?.userData.poiIndex as number | undefined;
-          const point = poiIndex === undefined ? undefined : surface.points[poiIndex];
-          if (point) {
-            setSelectedPoi({ index: point.index, kind: point.kind, name: point.name });
-            setMessageForSeconds(`${point.name} seleccionado · pulsa E o usa la acción contextual.`);
-          } else setSelectedPoi(null);
-        } else {
-          const hit = raycastAt(event);
-          const id = hit?.object.userData.bodyId as string | undefined;
-          if (id) {
-            selectedNow = id;
-            setSelectedId(id);
-            setMessageForSeconds(`${id === 'sun' ? 'Sol' : getBody(id)?.data.name ?? 'Destino'} seleccionado · revisa la ficha y traza una ruta.`);
-          } else if (modeNow === 'flight') {
-            raycaster.setFromCamera(pointer, camera);
-            routeTarget = raycaster.ray.origin.clone().addScaledVector(raycaster.ray.direction, 18);
-            routeTarget.y = THREE.MathUtils.clamp(routeTarget.y, -8, 8);
-            routeBody = undefined;
-            destinationMarker.position.copy(routeTarget);
-            destinationMarker.visible = true;
-            routeLine.visible = true;
-            autopilot = true;
-            setMessageForSeconds('Punto de navegación fijado · piloto automático activado.');
-          }
-        }
-      }
-      dragStart = undefined;
-      updateHover(event);
-    };
-    const onWheel = (event: WheelEvent) => {
-      event.preventDefault();
-      if (modeNow === 'orbit') {
-        const body = getBody(selectedNow);
-        const physicalBoundary = selectedNow === 'sun' ? SOLAR_EXCLUSION_RADIUS : selectedNow === 'saturn' ? (body?.data.radius ?? 0) * 1.9 + 0.42 : (body?.data.radius ?? 0) + 0.42;
-        const minCameraDistance = physicalBoundary / 0.78 + 0.45;
-        orbitDistance = THREE.MathUtils.clamp(orbitDistance + event.deltaY * 0.008, Math.max(1.7, minCameraDistance), 28);
-      }
-      else viewDistance = THREE.MathUtils.clamp(viewDistance + event.deltaY * 0.008, 3, 16);
-    };
-    const interactPoint = (index: number) => {
-      if (modeNow !== 'surface') return;
-      const point = surface.points[index];
-      if (!point) return;
-      const range = activeVehicle().position.distanceTo(point.position);
-      if (range > 4.2) {
-        setMessageForSeconds(`${point.name} está a ${range.toFixed(1)} m · acércate a menos de 4 m para interactuar.`);
-        return;
-      }
-      if (point.kind === 'rock') {
-        if (!currentProgress.scannedRocks.includes(point.index)) {
-          if (currentResources.energy < 8) { setMessageForSeconds('Energía insuficiente para activar el espectrómetro. Regresa a la estación de recarga.'); return; }
-          if (currentResources.storage + 8 > 100) { setMessageForSeconds('Almacenamiento lleno · transmite o revisa los datos antes de escanear más.'); return; }
-          const scannedRocks = [...currentProgress.scannedRocks, point.index];
-          const beacon = point.object.children[0] as THREE.Mesh<THREE.OctahedronGeometry, THREE.MeshStandardMaterial>;
-          beacon.material.color.set('#8be6ac');
-          beacon.material.emissive.set('#1a7044');
-          commitProgress({ scannedRocks }, `${point.name} escaneado · composición mineral registrada (${scannedRocks.length}/3).`);
-          commitResources({ energy: currentResources.energy - 8, storage: currentResources.storage + 8 });
-      bufferData('observations', 8);
-          return;
-        }
-        if (currentProgress.collectedSamples.includes(point.index)) {
-          setMessageForSeconds(`${point.name}: ya se tomó y está asegurado en el contenedor.`);
-          return;
-        }
-        if (currentResources.energy < 6) { setMessageForSeconds('Energía insuficiente para el taladro de muestreo.'); return; }
-        if (currentResources.storage + 12 > 100) { setMessageForSeconds('No hay espacio en el contenedor de muestras.'); return; }
-        const collectedSamples = [...currentProgress.collectedSamples, point.index];
-        commitProgress({ collectedSamples }, `Muestra de ${point.name} recolectada · ${collectedSamples.length}/3 muestras.`);
-        commitResources({ energy: currentResources.energy - 6, storage: currentResources.storage + 12 });
-      bufferData('sensors', 12);
-        return;
-      }
-      if (currentResources.energy < 30) {
-        const charged = Math.min(100, currentResources.energy + 45);
-        commitResources({ energy: charged, communications: Math.min(100, currentResources.communications + 12) });
-        setMessageForSeconds(`Estación de superficie: batería recargada a ${Math.round(charged)}% y enlace de radio restablecido.`);
-        return;
-      }
-      if (currentProgress.analyzed) { setMessageForSeconds('Las muestras ya fueron analizadas en esta campaña.'); return; }
-      if (currentProgress.scannedRocks.length < 3 || currentProgress.collectedSamples.length < 3) {
-        setMessageForSeconds(`La estación requiere 3 escaneos y 3 muestras. Progreso: ${currentProgress.scannedRocks.length}/3 · ${currentProgress.collectedSamples.length}/3.`);
-        return;
-      }
-      if (currentResources.energy < 12) { setMessageForSeconds('Energía insuficiente para el microscopio. Recarga antes del análisis.'); return; }
-      if (currentResources.storage + 18 > 100) { setMessageForSeconds('Almacenamiento insuficiente para el informe de laboratorio.'); return; }
-      commitProgress({ analyzed: true }, 'Análisis geológico completo · informe guardado en la computadora de a bordo.');
-      commitResources({ energy: currentResources.energy - 12, storage: currentResources.storage + 18 });
-      bufferData('sensors', 18);
-    };
-    const scanOrbitalSector = () => {
-      if (modeNow !== 'orbit') return;
-      if (mission.id === 'moon') { setMessageForSeconds('LUNAR FRONTIER: usa el rover y escanea las formaciones de la superficie.'); return; }
-      if (mission.id === 'earth' && !currentSatelliteDeployed) { setMessageForSeconds('Despliega primero el satélite de observación terrestre.'); return; }
-      if (selectedNow !== mission.targetBodyId || !currentSurvey.arrived) {
-        setMessageForSeconds(`El instrumento orbital está preparado para ${mission.destination}. Establece primero su órbita.`);
-        return;
-      }
-      if (currentSurvey.scannedRegions.length >= 3) { setMessageForSeconds('Los tres sectores de esta campaña ya fueron registrados. Transmite el informe al centro.'); return; }
-      if (currentResources.energy < scanEnergy || currentResources.storage + scanStorage > 100) {
-        setMessageForSeconds(currentResources.energy < scanEnergy ? 'Energía insuficiente para el instrumento orbital.' : 'Almacenamiento insuficiente. Transmite datos antes de otro escaneo.');
-        return;
-      }
-      const regions = getRegions();
-      const regionIndex = currentSurvey.scannedRegions.length;
-      if (mission.id === 'earth' && regionIndex === 0 && scienceTarget) { currentRecordedTarget = scienceTarget; setRecordedTarget(scienceTarget); writeStorage(`orbital-command-eonet-scan-${mission.id}`, JSON.stringify(scienceTarget)); }
-      const scannedRegions = [...currentSurvey.scannedRegions, regionIndex];
-      commitSurvey({ scannedRegions }, `${mission.destination}: ${regions[regionIndex]} escaneado · ${scannedRegions.length}/3 sectores.`);
-      commitResources({ energy: currentResources.energy - scanEnergy, storage: currentResources.storage + scanStorage });
-      bufferData('observations', scanStorage);
-    };
-    const onScanOrbital = () => scanOrbitalSector();
-    const onLabRecord = (event: Event) => {
-      const reading = (event as CustomEvent<LabReading>).detail;
-      const energyCost = scanEnergy / 2;
-      const storageCost = scanStorage / 3;
-      if (modeNow !== 'orbit' || selectedNow !== mission.targetBodyId || !reading || typeof reading.region !== 'string' || typeof reading.label !== 'string' || typeof reading.unit !== 'string' || !Number.isFinite(reading.value)) return;
-      if (currentResources.energy < energyCost || currentResources.storage + storageCost > 100 || currentLabReadings.length >= 24) { setMessageForSeconds('No se pudo registrar la lectura: revisa energía, almacenamiento o límite de lecturas.'); return; }
-      currentLabReadings = [...currentLabReadings, reading];
-      setLabReadings(currentLabReadings);
-      writeStorage(`orbital-command-lab-${mission.id}`, JSON.stringify(currentLabReadings));
-      commitResources({ energy: currentResources.energy - energyCost, storage: currentResources.storage + storageCost });
-      bufferData('sensors', storageCost);
-      setMessageForSeconds(`Lectura simulada registrada: ${reading.region}.`);
-    };
-    const onTransmitData = (event: Event) => {
-      const kind = (event as CustomEvent<DataKind>).detail;
-      if (!['observations', 'sensors', 'telemetry'].includes(kind) || currentBuffers[kind] <= 0) return;
-      if (modeNow !== 'orbit' || selectedNow !== mission.targetBodyId || currentResources.storage <= 0) return;
-      if (performance.now() < nextWindowAt) { setMessageForSeconds('La siguiente ventana de comunicación aún no está disponible.'); return; }
-      if (currentResources.energy < 2 || currentResources.communications < 2) { setMessageForSeconds('Energía o enlace insuficientes para transmitir el paquete.'); return; }
-      const transmitted = (radios[design.radio].data * orbitProfiles[design.orbit ?? 'balanced'].downlinkFactor) * 100 / hulls[design.ship].storage;
-      nextWindowAt = performance.now() + 3000; setWindowCooldown(3);
-      const nextBuffers = transmitBufferedData(currentBuffers, kind, transmitted);
-      commitBuffers(nextBuffers);
-      commitResources({ storage: totalBuffered(nextBuffers), energy: currentResources.energy - 2, communications: currentResources.communications - 2 });
-      setMessageForSeconds('Paquete científico transmitido · almacenamiento liberado.');
-    };
-    const scanNearby = () => {
-      if (modeNow !== 'surface') return;
-      let nearestIndex = -1;
-      let nearestDistance = Infinity;
-      surface.points.forEach((point, index) => {
-        const range = activeVehicle().position.distanceTo(point.position);
-        if (range < nearestDistance) { nearestDistance = range; nearestIndex = index; }
-      });
-      if (nearestIndex < 0 || nearestDistance > 4.2) {
-        setMessageForSeconds('Sin objetivo científico al alcance · sigue los beacons cian.');
-        return;
-      }
-      interactPoint(nearestIndex);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (explorationFailureReason(currentResources, modeNow, supportsSurface, currentProgress.transmitted || currentSurvey.transmitted)) { keys.clear(); stopEngine(); return; }
-      if (event.target instanceof HTMLElement && event.target.closest('input, select, textarea, button, a, summary, [contenteditable="true"], [role="button"], [role="dialog"]')) return;
-      const key = event.key.toLowerCase();
-      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(key)) event.preventDefault();
-      keys.add(key);
-      if (modeNow !== 'orbit' && !onFootNow && (modeNow === 'surface' ? currentResources.energy > 0 : currentResources.fuel > 0) && ['w', 'a', 's', 'd', 'arrowup', 'arrowdown'].includes(key)) startEngine();
-      if (modeNow === 'flight' && ['w', 'a', 's', 'd'].includes(key) && autopilot) {
-        autopilot = false;
-        routeTarget = undefined;
-        routeWaypoints.length = 0;
-        routeBody = undefined;
-        routeLine.visible = false;
-        destinationMarker.visible = false;
-      }
-      if (key === 'f' && !event.repeat && modeNow !== 'surface') {
-        cockpitRef.current = !cockpitRef.current;
-        setCockpit(cockpitRef.current);
-      }
-      if (key === 'e' && !event.repeat) {
-        if (modeNow === 'surface') scanNearby();
-        else if (modeNow === 'orbit') scanOrbitalSector();
-      }
-      if (key === 'escape' && modeNow !== 'flight') setModeNow('flight');
-    };
-    const onKeyUp = (event: KeyboardEvent) => { keys.delete(event.key.toLowerCase()); if (!['w', 'a', 's', 'd', 'arrowup', 'arrowdown'].some((key) => keys.has(key))) stopEngine(); };
-    const onBlur = () => { keys.clear(); stopEngine(); };
-    const onStartRoute = (event: Event) => {
-      const id = (event as CustomEvent<{ id: string }>).detail.id;
-      const target = createSafeRoute(id);
-      if (!target) { setMessageForSeconds('No hay una trayectoria orbital segura definida para este objeto.'); return; }
-      if (currentResources.fuel < 8) { setMessageForSeconds('Combustible crítico · la ruta no se puede iniciar de forma segura.'); return; }
-      selectedNow = id;
-      setSelectedId(id);
-      routeWaypoints.length = 0;
-      const laneStart = ship.position.clone();
-      laneStart.z = 9;
-      const laneEnd = target.clone();
-      laneEnd.z = 9;
-      routeWaypoints.push(laneStart, laneEnd, target);
-      routeTarget = routeWaypoints.shift();
-      routeBody = id;
-      destinationMarker.position.copy(target);
-      destinationMarker.visible = true;
-      routeLine.visible = true;
-      flightVelocity.set(0, 0, 0);
-      autopilot = true;
-      setModeNow('flight');
-      reportHazard('RUTA SEGURA: piloto automático usará un corredor elevado para rodear planetas y el Sol.');
-    };
-    let failureFrameHandled = false;
-    const onRestartMission = () => {
-      failureFrameHandled = false;
-      landingSequence = null;
-      setLandingInProgress(false);
-      currentProgress = { ...initialLunarProgress };
-      currentSurvey = { ...emptyOrbitalSurvey };
-      currentRecordedTarget = null; setRecordedTarget(null); removeStorage(`orbital-command-eonet-scan-${mission.id}`);
-      currentResources = { ...initialExplorationResources };
-      commitBuffers(emptyDataBuffers());
-      onFootNow = false; setOnFoot(false); surface.astronaut.visible = false;
-      currentLabReadings = [];
-      setLabReadings([]);
-      removeStorage(`orbital-command-lab-${mission.id}`);
-      currentPhotoCount = 0; setPhotoCount(0); removeStorage(`orbital-command-photos-${mission.id}`);
-      currentSensors = []; setSensors([]); removeStorage(`orbital-command-sensors-${mission.id}`);
-      currentEvents = []; removeStorage(`orbital-command-events-${mission.id}`);
-      if (mission.id === 'earth') { currentSatelliteDeployed = false; setSatelliteDeployed(false); satelliteOrbit.visible = false; removeStorage('orbital-command-satellite-earth'); }
-      sensorGroup.traverse((object) => { if (object instanceof THREE.Mesh) { object.geometry.dispose(); (object.material as THREE.Material).dispose(); } }); sensorGroup.clear();
-      saveLunarProgress(mission.id, currentProgress);
-      writeStorage(`orbital-command-survey-${mission.id}`, JSON.stringify(currentSurvey));
-      saveExplorationResources(mission.id, currentResources);
-      removeStorage(`orbital-command-tutorial-${mission.id}`);
-      setProgress(currentProgress);
-      setOrbitalSurvey(currentSurvey);
-      setResources(currentResources);
-      setTutorialDismissed(false);
-      tutorialDismissedRef.current = false;
-      setTutorialPointer(null);
-      setSelectedPoi(null);
-      setTransmissionCountdown(0);
-      nextWindowAt = 0; setWindowCooldown(0);
-      setTransmissionType(null);
-      routeWaypoints.length = 0;
-      routeTarget = undefined;
-      routeBody = undefined;
-      autopilot = false;
-      destinationMarker.visible = false;
-      routeLine.visible = false;
-      selectedNow = mission.targetBodyId;
-      setSelectedId(selectedNow);
-      ship.position.set(0, 1.1, 12);
-      const radial = new THREE.Vector3(ship.position.x, 0, ship.position.z).normalize();
-      flightVelocity.set(-radial.z, 0, radial.x).multiplyScalar(Math.sqrt(24 / Math.max(Math.hypot(ship.position.x, ship.position.z), 5.4)));
-      surface.rover.position.set(0, terrainHeight(0, 0, mission.id), 0);
-      setModeNow('flight');
-      reportHazard('');
-      setMessageForSeconds('Campaña reiniciada · nave y recursos restaurados en el punto de lanzamiento terrestre.');
-    };
-    const onChooseLandingZone = (event: Event) => {
-      const zoneId = (event as CustomEvent<string>).detail;
-      if (!landingZones.some((zone) => zone.id === zoneId)) return;
-      surface.setZone(zoneId);
-      commitProgress({ landingZone: zoneId }, `Zona seleccionada: ${landingZones.find((zone) => zone.id === zoneId)?.name}. Confirma un descenso seguro.`);
-    };
-    const onLand = (event: Event) => {
-      const zoneId = (event as CustomEvent<string>).detail;
-      if (!supportsSurface || modeNow !== 'orbit' || selectedNow !== mission.targetBodyId || !currentProgress.arrived || !currentProgress.orbit) {
-        setMessageForSeconds('Aterrizaje no disponible · llega primero al destino y establece órbita.');
-        return;
-      }
-      if (!landingZones.some((zone) => zone.id === zoneId)) { setMessageForSeconds('Selecciona una zona de aterrizaje válida.'); return; }
-      if (currentResources.fuel < 12 || currentResources.energy < 3 || currentResources.integrity < 35) { setMessageForSeconds('Recursos insuficientes para el descenso controlado.'); return; }
-      if (landingSequence) return;
-      const bodyPosition = getBodyPosition(mission.targetBodyId) ?? new THREE.Vector3();
-      landingSequence = { start: ship.position.clone(), end: bodyPosition.clone().add(new THREE.Vector3(0, 1.7, 0)), elapsed: 0, zoneId };
-      setLandingInProgress(true);
-      setMessageForSeconds('Descenso iniciado · estabilizando actitud, frenando y desplegando tren de aterrizaje.');
-      playSound('launch');
-    };
-    const onInteractPoi = (event: Event) => interactPoint((event as CustomEvent<number>).detail);
-    const onTransmit = () => {
-      if (modeNow !== 'surface' || !currentProgress.analyzed) { setMessageForSeconds('Transmisión bloqueada · completa primero el análisis geológico.'); return; }
-      if (!stationNearby || activeVehicle().position.distanceTo(surface.points[3].position) > 4.2) { setMessageForSeconds('Acércate a la antena de superficie para establecer el enlace.'); return; }
-      if (currentResources.communications < 12 || currentResources.energy < 5) { setMessageForSeconds('Recursos de enlace insuficientes · recarga en la estación antes de transmitir.'); return; }
-      commitResources({ communications: currentResources.communications - 12, energy: currentResources.energy - 5, storage: 0 });
-      commitBuffers(emptyDataBuffers());
-      commitProgress({ transmitted: true }, `Enlace confirmado · resultados de superficie de ${mission.destination} recibidos por el centro de control.`);
-      awardCompletion();
-      tutorialDismissedRef.current = true;
-      writeStorage(`orbital-command-tutorial-${mission.id}`, 'done');
-      setTutorialDismissed(true);
-      setTutorialPointer(null);
-    };
-    const onTransmitOrbital = () => {
-      if (modeNow !== 'orbit' || selectedNow !== mission.targetBodyId || !currentSurvey.arrived) {
-        setMessageForSeconds('Transmisión orbital bloqueada · establece primero órbita en el destino de campaña.');
-        return;
-      }
-      if (currentSurvey.scannedRegions.length < 3) { setMessageForSeconds('Completa los tres sectores científicos antes de transmitir.'); return; }
-      if (performance.now() < nextWindowAt) { setMessageForSeconds('Espera la siguiente ventana de comunicación.'); return; }
-      if (currentResources.storage * hulls[design.ship].storage / 100 > (radios[design.radio].data * orbitProfiles[design.orbit ?? 'balanced'].downlinkFactor) + 0.0001) { setMessageForSeconds('El paquete supera la capacidad de esta ventana. Transmite paquetes parciales antes del informe final.'); return; }
-      if (currentResources.communications < 15 || currentResources.energy < 5) { setMessageForSeconds('Recursos de comunicación insuficientes para el uplink orbital.'); return; }
-      commitResources({ communications: currentResources.communications - 15, energy: currentResources.energy - 5, storage: 0 });
-      commitBuffers(emptyDataBuffers());
-      commitSurvey({ transmitted: true }, `Datos de ${mission.destination} recibidos · ${mission.name} completada.`);
-      awardCompletion();
-    };
-    const onSetMode = (event: Event) => setModeNow((event as CustomEvent<Mode>).detail);
-    const onCapturePhoto = () => {
-      if (currentPhotoCount >= 1000) return;
-      try {
-        renderer.render(scene, camera);
-        const image = renderer.domElement.toDataURL('image/png');
-        const link = document.createElement('a'); link.href = image; link.download = `orbital-${mission.id}-${currentPhotoCount + 1}.png`; link.click();
-        currentPhotoCount += 1; setPhotoCount(currentPhotoCount); writeStorage(`orbital-command-photos-${mission.id}`, String(currentPhotoCount));
-        setMessageForSeconds('Fotografía de la simulación exportada.');
-      } catch { setMessageForSeconds('No se pudo exportar la fotografía en este navegador.'); }
-    };
-    const onDeploySatellite = () => {
-      if (mission.id !== 'earth' || modeNow !== 'orbit' || selectedNow !== 'earth' || currentSatelliteDeployed) return;
-      if (currentResources.energy < 5 || currentResources.storage + 5 > 100 || currentLabReadings.length >= 24) { setMessageForSeconds('No hay suficiente energía o almacenamiento para desplegar el satélite.'); return; }
-      currentSatelliteDeployed = true; setSatelliteDeployed(true); satelliteOrbit.visible = true; writeStorage('orbital-command-satellite-earth', 'done');
-      currentLabReadings = [...currentLabReadings, { region: 'Órbita terrestre', label: 'Satélite desplegado', value: 1, unit: 'equipo simulado' }];
-      setLabReadings(currentLabReadings); writeStorage(`orbital-command-lab-${mission.id}`, JSON.stringify(currentLabReadings));
-      commitResources({ energy: currentResources.energy - 5, storage: currentResources.storage + 5 });
-      bufferData('sensors', 5);
-      setMessageForSeconds('Satélite desplegado · sensores terrestres listos para observación.');
-    };
-    const onDeploySensor = () => {
-      if (modeNow !== 'surface' || currentSensors.length >= 3 || currentLabReadings.length >= 24 || currentResources.energy < 5 || currentResources.storage + 5 > 100) { setMessageForSeconds('No se puede instalar el sensor: revisa energía, datos y límite de equipos.'); return; }
-      const position = activeVehicle().position;
-      const sensor = { x: THREE.MathUtils.clamp(position.x + 1.5, -42, 42), z: position.z };
-      currentSensors = [...currentSensors, sensor]; setSensors(currentSensors); createSensor(sensor);
-      writeStorage(`orbital-command-sensors-${mission.id}`, JSON.stringify(currentSensors));
-      const reading: LabReading = { region: `Estación ${currentSensors.length}`, label: 'Sensor desplegado', value: 1, unit: 'equipo simulado' };
-      currentLabReadings = [...currentLabReadings, reading]; setLabReadings(currentLabReadings); writeStorage(`orbital-command-lab-${mission.id}`, JSON.stringify(currentLabReadings));
-      commitResources({ energy: currentResources.energy - 5, storage: currentResources.storage + 5 });
-      bufferData('sensors', 5);
-      setMessageForSeconds('Sensor científico instalado · registro guardado en la nave.');
-    };
-    const onToggleWalking = () => {
-      if (modeNow !== 'surface' || !['moon', 'mars'].includes(mission.id)) return;
-      if (onFootNow && surface.astronaut.position.distanceTo(surface.rover.position) > 3) { setMessageForSeconds('Acércate al rover para volver a subir.'); return; }
-      onFootNow = !onFootNow;
-      if (onFootNow) { surface.astronaut.position.copy(surface.rover.position).add(new THREE.Vector3(1.8, 0, 0)); surface.astronaut.rotation.copy(surface.rover.rotation); }
-      surface.astronaut.visible = onFootNow;
-      setOnFoot(onFootNow);
-      setMessageForSeconds(onFootNow ? 'Actividad extravehicular simulada · permanece cerca del rover y vigila la energía.' : 'Tripulación a bordo del rover.');
-    };
-    if (arrival) {
-      setModeNow('orbit');
-      saveExplorationResources(mission.id, currentResources);
-      if (supportsSurface) commitProgress({ arrived: true, orbit: true }, `Viaje completado · órbita de ${mission.destination} estable. Selecciona una zona de aterrizaje.`);
-      if (mission.id !== 'moon') commitSurvey({ arrived: true }, `Viaje completado · órbita científica de ${mission.destination} establecida.`);
-    }
-    const narrativeTimer = arrival && ['earth', 'mars'].includes(mission.id) ? window.setTimeout(() => {
-      const text = mission.id === 'earth'
-        ? 'Desde aquí, las fronteras desaparecen. No vemos países, diferencias ni divisiones. Solo vemos un hogar. Recuerda por qué estamos aquí.'
-        : 'Ahí está Marte. Después de tantos meses de preparación, verlo ante nosotros nos recuerda por qué emprendimos este viaje. Tómate un momento y revisa los sistemas antes de explorar.';
-      window.dispatchEvent(new CustomEvent('orbital-commander-transmission', { detail: { id: `first-look-${mission.id}`, title: mission.id === 'earth' ? 'LA PRIMERA MIRADA' : 'LA FRONTERA ROJA', text } }));
-    }, 3000) : 0;
-    renderer.domElement.addEventListener('pointerdown', onPointerDown);
-    renderer.domElement.addEventListener('pointermove', onPointerMove);
-    renderer.domElement.addEventListener('pointerup', onPointerUp);
-    renderer.domElement.addEventListener('pointerleave', () => { if (!dragStart) renderer.domElement.style.cursor = 'crosshair'; });
-    renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    window.addEventListener('blur', onBlur);
-    window.addEventListener('orbital-start-route', onStartRoute);
-    window.addEventListener('orbital-restart-mission', onRestartMission);
-    window.addEventListener('orbital-choose-landing-zone', onChooseLandingZone);
-    window.addEventListener('orbital-land', onLand);
-    window.addEventListener('orbital-interact-poi', onInteractPoi);
-    window.addEventListener('orbital-transmit-results', onTransmit);
-    window.addEventListener('orbital-transmit-orbit-results', onTransmitOrbital);
-    window.addEventListener('orbital-scan-sector', onScanOrbital);
-    window.addEventListener('orbital-lab-record', onLabRecord);
-    window.addEventListener('orbital-transmit-data', onTransmitData);
-    window.addEventListener('orbital-set-mode', onSetMode);
-    window.addEventListener('orbital-toggle-walking', onToggleWalking);
-    window.addEventListener('orbital-capture-photo', onCapturePhoto);
-    window.addEventListener('orbital-deploy-sensor', onDeploySensor);
-    window.addEventListener('orbital-deploy-satellite', onDeploySatellite);
-
-    let animationId = 0;
-    const animate = () => {
-      animationId = window.requestAnimationFrame(animate);
-      if (document.hidden) { clock.getDelta(); return; }
-      if (explorationFailureReason(currentResources, modeNow, supportsSurface, currentProgress.transmitted || currentSurvey.transmitted)) {
-        clock.getDelta(); keys.clear(); stopEngine();
-        if (!failureFrameHandled) { failureFrameHandled = true; setResources({ ...currentResources }); saveExplorationResources(mission.id, currentResources); }
-        renderer.render(scene, camera); return;
-      }
-      const delta = Math.min(clock.getDelta(), 0.045);
-      const elapsed = clock.elapsedTime;
-      if (landingSequence) {
-        landingSequence.elapsed += delta;
-        const t = THREE.MathUtils.clamp(landingSequence.elapsed / 3.2, 0, 1);
-        const ease = t * t * (3 - 2 * t);
-        ship.position.lerpVectors(landingSequence.start, landingSequence.end, ease);
-        ship.rotation.z = Math.sin(t * Math.PI) * 0.12 * (1 - t);
-        desiredCamera.copy(ship.position).add(new THREE.Vector3(0, 2.6, 7));
-        camera.position.lerp(desiredCamera, 1 - Math.exp(-delta * 2.8));
-        camera.lookAt(ship.position);
-        if (t >= 1) {
-          const zoneId = landingSequence.zoneId;
-          landingSequence = null;
-          surface.setZone(zoneId);
-          commitResources({ fuel: currentResources.fuel - 12, energy: currentResources.energy - 3, integrity: currentResources.integrity - 2 });
-          commitProgress({ landingZone: zoneId, landed: true, roverDeployed: true }, 'Aterrizaje seguro · rover desplegado en la región seleccionada.');
-          setSelectedPoi(null);
-          setLandingInProgress(false);
-          setModeNow('surface');
-        }
-        renderer.render(scene, camera);
-        return;
-      }
-      sun.rotation.y = elapsed * 0.035;
-      satelliteOrbit.rotation.y += delta * 0.3;
-      sunGlow.scale.setScalar(1 + Math.sin(elapsed * 0.8) * 0.018);
-      for (const body of bodies) {
-        const angle = body.phase + elapsed * body.angularSpeed;
-        const parent = body.data.orbitalParent ? bodies.find((item) => item.data.id === body.data.orbitalParent) : undefined;
-        if (parent) {
-          body.group.position.set(parent.group.position.x + Math.cos(angle) * body.orbitRadius, parent.group.position.y, parent.group.position.z + Math.sin(angle) * body.orbitRadius);
-        } else {
-          body.group.position.set(Math.cos(angle) * body.orbitRadius, 0, Math.sin(angle) * body.orbitRadius);
-        }
-        body.mesh.rotation.y += delta * 0.08;
-      }
-      stars.rotation.y = elapsed * 0.0007;
-
-      if (modeNow === 'flight') {
-        ship.rotation.set(pitch, yaw, 0, 'YXZ');
-        if (autopilot && routeTarget) {
-          const direction = routeTarget.clone().sub(ship.position);
-          const remaining = direction.length();
-          if (remaining < 0.62) {
-            if (routeWaypoints.length > 0) {
-              routeTarget = routeWaypoints.shift();
-            } else {
-              const arrivedAt = routeBody;
-              autopilot = false;
-              routeTarget = undefined;
-              destinationMarker.visible = false;
-              routeLine.visible = false;
-              flightVelocity.set(0, 0, 0);
-              if (arrivedAt) {
-                selectedNow = arrivedAt;
-                setSelectedId(arrivedAt);
-                routeBody = undefined;
-                setModeNow('orbit');
-                reportHazard('');
-                if (arrivedAt === 'moon' && mission.id === 'moon') {
-                  commitProgress({ arrived: true, orbit: true }, 'Luna alcanzada · órbita científica estable. Elige ahora una zona de aterrizaje.');
-                } else if (arrivedAt === mission.targetBodyId) {
-                  commitSurvey({ arrived: true }, `Órbita científica estable alrededor de ${arrivedAt === 'sun' ? 'Sol' : getBody(arrivedAt)?.data.name ?? 'destino'}. Pulsa E para activar el instrumento.`);
-                } else setMessageForSeconds(`Órbita segura establecida alrededor de ${arrivedAt === 'sun' ? 'Sol' : getBody(arrivedAt)?.data.name ?? 'destino'}.`);
-              } else setMessageForSeconds('Punto de ruta alcanzado · navegación manual disponible.');
-            }
-          } else {
-            direction.normalize();
-            const targetYaw = Math.atan2(-direction.x, -direction.z);
-            const targetPitch = Math.asin(THREE.MathUtils.clamp(direction.y, -1, 1));
-            yaw += THREE.MathUtils.euclideanModulo(targetYaw - yaw + Math.PI, Math.PI * 2) - Math.PI;
-            pitch = THREE.MathUtils.lerp(pitch, targetPitch, Math.min(delta * 2.2, 1));
-            ship.rotation.set(pitch, yaw, 0, 'YXZ');
-            const step = Math.min(5.2 * delta, remaining);
-            const fuelCost = step * 0.55;
-            if (currentResources.fuel < fuelCost) {
-              autopilot = false;
-              routeTarget = undefined;
-              routeWaypoints.length = 0;
-              destinationMarker.visible = false;
-              routeLine.visible = false;
-              setMessageForSeconds('Combustible agotado · piloto automático detenido en una trayectoria segura.');
-            } else {
-              const candidate = ship.position.clone().addScaledVector(direction, step);
-              if (!checkFlightSafety(candidate)) {
-                autopilot = false;
-                routeTarget = undefined;
-                routeWaypoints.length = 0;
-                destinationMarker.visible = false;
-                routeLine.visible = false;
-                flightVelocity.set(0, 0, 0);
-              } else {
-                ship.position.copy(candidate);
-                currentResources.fuel = Math.max(0, currentResources.fuel - fuelCost);
-              }
-            }
-            currentSpeed = autopilot ? 5.2 : 0;
-          }
-        } else {
-          const forward = new THREE.Vector3(0, 0, -1).applyEuler(ship.rotation);
-          const right = new THREE.Vector3(1, 0, 0).applyEuler(ship.rotation);
-          if (keys.has('arrowleft')) yaw += delta * 1.1;
-          if (keys.has('arrowright')) yaw -= delta * 1.1;
-          if (keys.has('arrowup')) pitch = Math.max(-1.1, pitch - delta * 0.65);
-          if (keys.has('arrowdown')) pitch = Math.min(1.1, pitch + delta * 0.65);
-          ship.rotation.set(pitch, yaw, 0, 'YXZ');
-          const thrustAcceleration = new THREE.Vector3();
-          const thrust = keys.has('shift') ? 5.2 : 2.1;
-          if (keys.has('w') || keys.has('arrowup')) thrustAcceleration.addScaledVector(forward, thrust);
-          if (keys.has('s') || keys.has('arrowdown')) thrustAcceleration.addScaledVector(forward, -thrust * 0.72);
-          if (keys.has('a')) thrustAcceleration.addScaledVector(right, -thrust * 0.8);
-          if (keys.has('d')) thrustAcceleration.addScaledVector(right, thrust * 0.8);
-          const fuelCost = thrustAcceleration.length() * delta * 0.055;
-          if (currentResources.fuel < fuelCost) {
-            thrustAcceleration.set(0, 0, 0);
-            if (keys.has('w') || keys.has('s') || keys.has('a') || keys.has('d')) reportHazard('COMBUSTIBLE AGOTADO: el vehículo conserva su inercia, pero no puede acelerar.');
-          } else currentResources.fuel = Math.max(0, currentResources.fuel - fuelCost);
-          const acceleration = thrustAcceleration;
-          const solarOffset = ship.position.clone().sub(sun.position);
-            const solarDistance = Math.max(solarOffset.length(), SOLAR_EXCLUSION_RADIUS);
-          acceleration.addScaledVector(solarOffset.normalize(), -24 / (solarDistance * solarDistance));
-          for (const body of bodies) {
-            if (body.data.id === 'asteroid') continue;
-            const offset = ship.position.clone().sub(body.group.position);
-            const distanceToBody = Math.max(offset.length(), body.data.radius + 0.42);
+    const keys = new S…12259 tokens truncated…body.data.radius + 0.42);
             const bodyMu = 0.06 * body.data.radius ** 3;
             acceleration.addScaledVector(offset.normalize(), -bodyMu / (distanceToBody * distanceToBody));
           }
@@ -1402,6 +688,27 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
         surface.points.forEach((point) => { point.object.children[0]?.rotation && (point.object.children[0].rotation.y += delta * 0.7); });
       }
 
+      if (liveSelfId && getLiveSnapshot().connected) {
+        const avatarVehicle = modeNow === 'surface' ? activeVehicle() : ship;
+        const driving = ['w', 's', 'arrowup', 'arrowdown'].some((key) => keys.has(key));
+        const localActivity = performance.now() < interactionUntil ? 'interact' : modeNow !== 'surface' ? 'aboard' : driving ? keys.has('shift') ? 'run' : 'walk' : 'idle';
+        const offsetX = modeNow === 'surface' && !onFootNow ? 1.5 : 0;
+        const localPose: LivePose = { x: avatarVehicle.position.x + offsetX, y: avatarVehicle.position.y, z: avatarVehicle.position.z, yaw: avatarVehicle.rotation.y, activity: localActivity, mode: modeNow };
+        setLivePose(localPose);
+      }
+      for (const player of teamPlayers) {
+        const avatar = teamAvatars.get(player.userId); if (!avatar) continue;
+        const pose = player.pose;
+        avatar.rig.root.position.lerp(new THREE.Vector3(pose.x, pose.y, pose.z), 1 - Math.exp(-delta * 12));
+        avatar.rig.root.rotation.y = pose.yaw;
+        const gait = pose.activity === 'walk' ? 0.75 : pose.activity === 'run' ? 1.6 : pose.activity === 'interact' ? 0.25 : 0;
+        for (let i = 0; i < avatar.rig.arms.length; i += 1) {
+          avatar.rig.arms[i].rotation.z = gait ? Math.sin(elapsed * 8 * gait + i * Math.PI) * (pose.activity === 'interact' ? 0.42 : 0.48) : 0;
+          avatar.rig.legs[i].rotation.x = gait && pose.activity !== 'interact' ? Math.sin(elapsed * 8 * gait + i * Math.PI) * 0.48 : 0;
+        }
+        avatar.rig.root.scale.setScalar(pose.activity === 'aboard' ? 0.52 : 0.76);
+      }
+
       currentResources.elapsedMinutes += delta * 0.4;
 
       if (elapsed - lastGuideUpdate > 0.28) {
@@ -1464,6 +771,7 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
 
     return () => {
       window.cancelAnimationFrame(animationId);
+      unsubscribeTeamPresence();
       stopEngine();
       window.clearTimeout(toastTimer);
       window.clearTimeout(acquisitionTimer);
@@ -1641,3 +949,4 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
     </section>
   );
 }
+

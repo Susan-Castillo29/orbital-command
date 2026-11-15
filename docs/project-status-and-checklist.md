@@ -43,7 +43,7 @@ This is a code-based status record, not a claim of expert validation. “Partial
 
 ## Collaboration and impact
 
-- [ ] Accounts, sign-in, authenticated users, online teams, real-time cooperation for up to four people, role assignments, competition, shared leaderboards and server-side synchronisation. Static GitHub Pages does not supply these services.
+- [~] Accounts, teams, four-player cap and roles use Supabase. Private Realtime presence now carries player identity/role and 3D movement; short team chat and host mission/screen selection are broadcast. The solar-system and exploration scenes render teammate avatars. The `202611150003_realtime_multiplayer.sql` migration and Supabase build configuration must be applied. Transit/resources/progress remain per-client; there is no authoritative shared flight server or synchronized exploration state yet. Competition and verified scores remain unavailable.
 - [x] Fictional Dominican tracking context, international collaboration narrative and optional device-local learning assessment with consent, export and deletion.
 - [ ] Independent scientific review, accessibility review by specialists and users, real participant studies and verified reach or impact evidence. Local self-selected assessment results do not establish impact.
 
@@ -58,3 +58,4 @@ This is a code-based status record, not a claim of expert validation. “Partial
 - GitHub Pages: the deployment workflow sets `VITE_NASA_MODE=snapshot`; regular local development defaults to the proxy and falls back to snapshots.
 - A stale browser tab can reference a hashed asset removed by a later deployment. The application reloads once, with a 30-second limit, and the error boundary offers manual reload if recovery cannot complete.
 - Next priorities: secure identity and hosted real-time collaboration; full localisation including source responses; meaningful mission-specific mechanics and failure analysis; expert and user evaluation; device and performance testing.
+

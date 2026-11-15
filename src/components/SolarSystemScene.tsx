@@ -1,6 +1,6 @@
 import FullscreenControl from './FullscreenControl';
 import { attachRenderQuality } from '../systems/renderQuality';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { Mission } from '../data/missions';
@@ -8,6 +8,7 @@ import { localiseMission } from '../data/missionLocale';
 import { celestialBodies } from '../data/celestialBodies';
 import type { ShipId } from '../data/ships';
 import { loadPlanetTexture } from '../systems/planetTextures';
+import { getLiveSnapshot, setLivePose, subscribeLiveSnapshot, type LiveActivity, type LivePlayer, type LivePose } from '../collaboration/liveSession';
 
 type Props = {
   mission: Mission;
@@ -17,6 +18,49 @@ type Props = {
 };
 
 type Body = { id: string; orbit: number; phase: number; group: THREE.Group; speed: number; parent?: string };
+export type AvatarRig = { root: THREE.Group; arms: THREE.Group[]; legs: THREE.Group[] };
+
+const roleColors: Record<string, number> = { planning: 0x78d8ec, engineering: 0xd8b16a, science: 0x95dfaa, communications: 0xc39dff };
+export function createPlayerAvatar(player: LivePlayer): AvatarRig {
+  const root = new THREE.Group();
+  root.userData.playerId = player.userId;
+  const suit = new THREE.MeshStandardMaterial({ color: roleColors[player.role] ?? 0x78d8ec, metalness: 0.18, roughness: 0.6, emissive: roleColors[player.role] ?? 0x78d8ec, emissiveIntensity: 0.08 });
+  const trim = new THREE.MeshStandardMaterial({ color: 0xdfeef2, metalness: 0.34, roughness: 0.36 });
+  const visor = new THREE.MeshStandardMaterial({ color: 0x17374a, metalness: 0.8, roughness: 0.18, emissive: 0x24799a, emissiveIntensity: 0.14 });
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.19, 0.42, 3, 8), suit); torso.position.y = 0.67; root.add(torso);
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 10), trim); helmet.position.y = 1.13; root.add(helmet);
+  const face = new THREE.Mesh(new THREE.SphereGeometry(0.145, 12, 8), visor); face.position.set(0, 1.14, -0.09); root.add(face);
+  const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.34, 0.13), trim); backpack.position.set(0, 0.72, 0.2); root.add(backpack);
+  const arms: THREE.Group[] = []; const legs: THREE.Group[] = [];
+  for (const side of [-1, 1]) {
+    const arm = new THREE.Group(); arm.position.set(side * 0.23, 0.83, 0); const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.065, 0.28, 3, 6), suit); upper.position.y = -0.16; arm.add(upper); root.add(arm); arms.push(arm);
+    const leg = new THREE.Group(); leg.position.set(side * 0.095, 0.39, 0); const lower = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.27, 3, 6), trim); lower.position.y = -0.16; leg.add(lower); root.add(leg); legs.push(leg);
+  }
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), new THREE.MeshBasicMaterial({ color: 0x64edb2 })); beacon.position.set(0.16, 1.25, 0); root.add(beacon);
+  const canvas = document.createElement('canvas'); canvas.width = 384; canvas.height = 96;
+  const context = canvas.getContext('2d');
+  if (context) {
+    context.fillStyle = '#06121ddd'; context.beginPath(); context.roundRect(3, 3, 378, 90, 18); context.fill();
+    context.strokeStyle = '#76d7eeaa'; context.lineWidth = 3; context.stroke();
+    context.fillStyle = '#effaff'; context.font = 'bold 32px Segoe UI, sans-serif'; context.textAlign = 'center'; context.fillText(player.displayName.slice(0, 18), 192, 41);
+    context.fillStyle = '#91dced'; context.font = 'bold 20px Segoe UI, sans-serif'; context.fillText(player.role.toUpperCase(), 192, 72);
+  }
+  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
+  const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false })); label.position.y = 1.72; label.scale.set(1.9, 0.48, 1); root.add(label);
+  root.scale.setScalar(0.76);
+  return { root, arms, legs };
+}
+export function disposeAvatar(rig: AvatarRig) {
+  rig.root.traverse((object) => {
+    if (!(object instanceof THREE.Mesh) && !(object instanceof THREE.Sprite)) return;
+    if (object instanceof THREE.Mesh) object.geometry.dispose();
+    const material = object.material;
+    for (const item of Array.isArray(material) ? material : [material]) {
+      if ('map' in item && item.map instanceof THREE.Texture) item.map.dispose();
+      item.dispose();
+    }
+  });
+}
 
 function makeOrbit(radius: number, color: number, opacity = 0.19) {
   const points: THREE.Vector3[] = [];
@@ -95,6 +139,11 @@ function makeShip(shipId: ShipId) {
 
 export default function SolarSystemScene({ mission, onSelect, shipId, language }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const [liveSession, setLiveSession] = useState(getLiveSnapshot);
+  useEffect(() => subscribeLiveSnapshot(() => {
+    const next = getLiveSnapshot();
+    setLiveSession((current) => current.connected === next.connected && current.error === next.error && current.players.length === next.players.length && current.players.every((player, index) => player.userId === next.players[index]?.userId && player.displayName === next.players[index]?.displayName && player.role === next.players[index]?.role && player.isHost === next.players[index]?.isHost) ? current : next);
+  }), []);
   const selectRef = useRef(onSelect);
   const selectedRef = useRef(mission.id);
   useEffect(() => { selectRef.current = onSelect; }, [onSelect]);
@@ -224,6 +273,54 @@ export default function SolarSystemScene({ mission, onSelect, shipId, language }
     shipOrbit.rotation.x = Math.PI / 2;
     bodies.find((body) => body.id === 'earth')?.group.add(shipOrbit);
 
+    const earthBody = bodies.find((body) => body.id === 'earth');
+    const teamDock = new THREE.Group();
+    teamDock.position.set(0, 1.05, 0);
+    earthBody?.group.add(teamDock);
+    const dock = new THREE.Mesh(new THREE.CylinderGeometry(2.05, 2.05, 0.08, 48), new THREE.MeshStandardMaterial({ color: 0x143349, metalness: 0.6, roughness: 0.42, transparent: true, opacity: 0.82 }));
+    dock.position.y = -0.03; teamDock.add(dock);
+    const dockRing = new THREE.Mesh(new THREE.TorusGeometry(2.05, 0.035, 8, 64), new THREE.MeshBasicMaterial({ color: 0x6adbf0 }));
+    dockRing.rotation.x = Math.PI / 2; teamDock.add(dockRing);
+    const playerAvatars = new Map<string, { rig: AvatarRig; role: string; displayName: string; activity: LiveActivity }>();
+    let livePlayers: LivePlayer[] = [];
+    let selfId: string | null = null;
+    let localPose: LivePose = { x: 0, y: 0, z: 0, yaw: 0, activity: 'idle', mode: 'system' };
+    let interactionUntil = 0;
+    let aboard = false;
+    const pressed = new Set<string>();
+    const ignoreTyping = (target: EventTarget | null) => target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName));
+    const onLiveKeyDown = (event: KeyboardEvent) => {
+      if (!getLiveSnapshot().connected || ignoreTyping(event.target)) return;
+      const key = event.key.toLowerCase();
+      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(key)) { pressed.add(key); event.preventDefault(); }
+      if (key === 'e' && !event.repeat) { aboard = !aboard; event.preventDefault(); }
+      if (key === 'f' && !event.repeat) { interactionUntil = performance.now() + 900; event.preventDefault(); }
+    };
+    const onLiveKeyUp = (event: KeyboardEvent) => { pressed.delete(event.key.toLowerCase()); };
+    const onLiveBlur = () => pressed.clear();
+    const refreshLivePlayers = () => {
+      const live = getLiveSnapshot();
+      livePlayers = live.players; selfId = live.selfId;
+      teamDock.visible = live.connected;
+      for (const player of livePlayers) {
+        if (player.userId === selfId) localPose = { ...player.pose };
+        let entry = playerAvatars.get(player.userId);
+        if (!entry || entry.role !== player.role || entry.displayName !== player.displayName) {
+          if (entry) { teamDock.remove(entry.rig.root); disposeAvatar(entry.rig); }
+          const rig = createPlayerAvatar(player); entry = { rig, role: player.role, displayName: player.displayName, activity: player.pose.activity };
+          playerAvatars.set(player.userId, entry); teamDock.add(rig.root);
+        }
+        entry.activity = player.pose.activity;
+      }
+      const connectedIds = new Set(livePlayers.map((player) => player.userId));
+      for (const [id, entry] of playerAvatars) if (!connectedIds.has(id)) { teamDock.remove(entry.rig.root); disposeAvatar(entry.rig); playerAvatars.delete(id); }
+    };
+    const unsubscribeLive = subscribeLiveSnapshot(refreshLivePlayers);
+    refreshLivePlayers();
+    window.addEventListener('keydown', onLiveKeyDown);
+    window.addEventListener('keyup', onLiveKeyUp);
+    window.addEventListener('blur', onLiveBlur);
+
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     const clickTargets: THREE.Object3D[] = [];
@@ -258,7 +355,8 @@ export default function SolarSystemScene({ mission, onSelect, shipId, language }
     const animate = () => {
       animationId = window.requestAnimationFrame(animate);
       if (document.hidden) { clock.getDelta(); return; }
-      const elapsed = clock.getElapsedTime();
+      const delta = Math.min(clock.getDelta(), 0.05);
+      const elapsed = clock.elapsedTime;
       sun.rotation.y = elapsed * 0.045;
       for (const body of bodies) {
         const angle = body.phase + elapsed * body.speed * 0.08;
@@ -269,6 +367,33 @@ export default function SolarSystemScene({ mission, onSelect, shipId, language }
       const shipAngle = elapsed * 0.18;
       ship.position.set((earth?.group.position.x ?? 0) + Math.cos(shipAngle) * 1.12, 0.24 * Math.sin(elapsed * 0.7), (earth?.group.position.z ?? 0) + Math.sin(shipAngle) * 1.12);
       ship.rotation.y = -shipAngle + Math.PI / 2;
+      if (selfId && getLiveSnapshot().connected) {
+        const forward = Number(pressed.has('w') || pressed.has('arrowup')) - Number(pressed.has('s') || pressed.has('arrowdown'));
+        const turn = Number(pressed.has('a') || pressed.has('arrowleft')) - Number(pressed.has('d') || pressed.has('arrowright'));
+        const moving = forward !== 0;
+        const speed = pressed.has('shift') ? 4.1 : 2.1;
+        localPose.yaw += turn * delta * 2.25;
+        if (!aboard && moving) {
+          localPose.x = THREE.MathUtils.clamp(localPose.x + Math.sin(localPose.yaw) * forward * speed * delta, -2.2, 2.2);
+          localPose.z = THREE.MathUtils.clamp(localPose.z - Math.cos(localPose.yaw) * forward * speed * delta, -2.2, 2.2);
+        }
+        localPose.y = aboard ? 0.32 : 0;
+        localPose.activity = performance.now() < interactionUntil ? 'interact' : aboard ? 'aboard' : moving ? pressed.has('shift') ? 'run' : 'walk' : 'idle';
+        localPose.mode = 'system';
+        setLivePose(localPose);
+      }
+      for (const player of livePlayers) {
+        const entry = playerAvatars.get(player.userId); if (!entry) continue;
+        const target = player.userId === selfId ? localPose : player.pose;
+        entry.rig.root.position.lerp(new THREE.Vector3(target.x, target.y, target.z), 1 - Math.exp(-delta * 10));
+        entry.rig.root.rotation.y = target.yaw;
+        const gait = target.activity === 'walk' ? 0.75 : target.activity === 'run' ? 1.6 : target.activity === 'interact' ? 0.25 : 0;
+        for (let i = 0; i < entry.rig.arms.length; i += 1) {
+          entry.rig.arms[i].rotation.z = gait ? Math.sin(elapsed * 8 * gait + i * Math.PI) * (target.activity === 'interact' ? 0.42 : 0.48) : 0;
+          entry.rig.legs[i].rotation.x = gait && target.activity !== 'interact' ? Math.sin(elapsed * 8 * gait + i * Math.PI) * 0.48 : 0;
+        }
+        entry.rig.root.scale.setScalar(target.activity === 'aboard' ? 0.52 : 0.76);
+      }
       sunHalo.scale.setScalar(1 + Math.sin(elapsed * 0.7) * 0.018);
       stars.rotation.y = elapsed * 0.0015;
       if (focused) {
@@ -301,6 +426,10 @@ export default function SolarSystemScene({ mission, onSelect, shipId, language }
 
     return () => {
       window.cancelAnimationFrame(animationId);
+      unsubscribeLive();
+      window.removeEventListener('keydown', onLiveKeyDown);
+      window.removeEventListener('keyup', onLiveKeyUp);
+      window.removeEventListener('blur', onLiveBlur);
       resizeObserver.disconnect();
       renderer.domElement.removeEventListener('pointerdown', rememberPointer);
       renderer.domElement.removeEventListener('pointerup', onPointerDown);
@@ -331,7 +460,9 @@ export default function SolarSystemScene({ mission, onSelect, shipId, language }
       <FullscreenControl language={language} label={language === "en" ? "solar system" : "sistema solar"} /><div className="scene-topline"><span><i className="live-dot" /> {t("VISUALIZACIÓN EN VIVO", "LIVE VISUALISATION")}</span><span>SECTOR SOL · 01</span></div>
       <div className="observatory-controls"><button onClick={() => window.dispatchEvent(new CustomEvent('orbital-focus-body', { detail: mission.targetBodyId }))}>{t("Observar", "Observe")} {displayDestination}</button><button onClick={() => window.dispatchEvent(new Event('orbital-overview'))}>{t("Sistema completo", "Full system")}</button></div>
       <div className="scene-controls-hint"><span>DRAG <b>{t("ROTAR", "ROTATE")}</b></span><span>SCROLL <b>ZOOM</b></span><span>CLICK <b>{t("SELECCIONAR", "SELECT")}</b></span></div>
+      {liveSession.connected && <div className="cooperative-scene-hud" aria-live="polite"><strong>COOPERATIVE MULTIPLAYER · {liveSession.players.length}/4</strong><small>{t('WASD MOVER · MAYÚS CORRER · E ABORDAR · F INTERACTUAR','WASD MOVE · SHIFT RUN · E BOARD · F INTERACT')}</small><div>{liveSession.players.map((player)=><span key={player.userId}><i style={{background:`#${(roleColors[player.role]??0x78d8ec).toString(16).padStart(6,'0')}`}}/>{player.displayName} · {player.role}</span>)}</div></div>}
       <div className="scene-scale"><span>{t("ÓRBITAS Y TAMAÑOS DIFERENCIADOS", "DISTINCT ORBITS AND SIZES")}</span><div><i /></div><small>{t("DISTANCIA COMPRIMIDA · TAMAÑO EXAGERADO", "DISTANCE COMPRESSED · SIZE EXAGGERATED")}</small></div>
     </div>
   );
 }
+
