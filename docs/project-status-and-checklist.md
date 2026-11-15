@@ -51,8 +51,9 @@ This is a code-based status record, not a claim of expert validation. “Partial
 
 - Automated unit tests: `npm test`.
 - Production build: `npm run build`.
-- Browser tests in a configured local environment: `npm run test:browser`, `npm run test:campaign`, `npm run test:engineering`, `npm run test:reliability`, `npm run test:accessibility`, `npm run test:impact`; additional language and guidance scripts are in `tests/`.
+- Browser tests in a configured local environment: `npm run test:browser`, `npm run test:campaign`, `npm run test:telescope`, `npm run test:engineering`, `npm run test:reliability`, `npm run test:accessibility`, `npm run test:impact`; additional language and guidance scripts are in `tests/`.
 - Campaign ceremony browser regression: run `npm run build` before `npm run test:campaign`; Playwright serves the compiled assets directly, so no preview server is needed.
+- Telescope role browser regression: run `npm run build` before `npm run test:telescope`; it verifies astronaut progress isolation, gamma detector compatibility and the simulated launch flow.
 - To test the static build locally, run `VITE_NASA_MODE=snapshot npm run build`, then `npm run preview -- --host 127.0.0.1 --port 4188 --strictPort` in another terminal, followed by `npm run test:reliability`. This test uses the workspace Playwright installation.
 - GitHub Pages: the deployment workflow sets `VITE_NASA_MODE=snapshot`; regular local development defaults to the proxy and falls back to snapshots.
 - A stale browser tab can reference a hashed asset removed by a later deployment. The application reloads once, with a 30-second limit, and the error boundary offers manual reload if recovery cannot complete.
