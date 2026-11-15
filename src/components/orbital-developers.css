@@ -6,3 +6,5 @@
 @media(max-width:820px){.developer-workbench{grid-template-columns:1fr}}
 @media(max-width:820px){.developer-engine-section{grid-template-columns:1fr}.developer-engine-preview{height:300px}}
 @media(max-width:580px){.developer-workbench{padding:16px 12px}.developer-workbench-body{grid-template-columns:1fr}.developer-active-mission{min-height:0}}
+.developer-auth-form,.developer-auth-status{display:grid;gap:12px;padding:16px;border:1px solid var(--dev-line);background:#081722}.developer-auth-form h3{margin:0;color:#d8f2fa;font-size:16px;font-weight:550}.developer-auth-status{grid-template-columns:minmax(0,1fr) auto;align-items:center;color:#a8c1ce;font-size:12px}.developer-consent{grid-template-columns:18px 1fr;align-items:start;gap:10px;color:#adc1cb;font:11px/1.6 Inter,"Segoe UI",sans-serif;letter-spacing:0}.developer-consent input[type=checkbox]{width:16px;min-height:16px;height:16px;margin:1px 0;accent-color:#63c9e2}
+@media(max-width:580px){.developer-auth-status{grid-template-columns:1fr}.developer-auth-status .developer-button{justify-self:start}}

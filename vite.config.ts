@@ -12,7 +12,6 @@ export default defineConfig(({ mode }) => {
     if (serverEnv[key] && !process.env[key]) process.env[key] = serverEnv[key];
   }
   const cloudEnv = loadEnv(mode, process.cwd(), 'VITE_SUPABASE_');
-  const platformEnv = loadEnv(mode, process.cwd(), 'VITE_ORBITAL_');
   const cloudUrl = cloudEnv.VITE_SUPABASE_URL;
   const cloudKey = cloudEnv.VITE_SUPABASE_PUBLISHABLE_KEY;
   let cloudOrigin = '';
@@ -27,13 +26,6 @@ export default defineConfig(({ mode }) => {
     }
     cloudOrigin = parsed.origin;
   }
-  let platformOrigin = '';
-  if (platformEnv.VITE_ORBITAL_PLATFORM_API_URL) {
-    let parsed: URL;
-    try { parsed = new URL(platformEnv.VITE_ORBITAL_PLATFORM_API_URL); } catch { throw new Error('Invalid ORBITAL platform API URL'); }
-    if (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash || (parsed.protocol === 'http:' && !['localhost', '127.0.0.1'].includes(parsed.hostname))) throw new Error('ORBITAL platform API URL must use HTTPS (HTTP is allowed only on localhost).');
-    platformOrigin = parsed.origin;
-  }
   if (env.NASA_API_KEY && !process.env.NASA_API_KEY) process.env.NASA_API_KEY = env.NASA_API_KEY;
   return ({
   base: './',
@@ -41,7 +33,7 @@ export default defineConfig(({ mode }) => {
     name: 'orbital-production-csp',
     apply: 'build',
     transformIndexHtml() {
-      return [{ tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://images-assets.nasa.gov https://epic.gsfc.nasa.gov https://assets.science.nasa.gov; media-src 'self' blob:; connect-src 'self' ${cloudOrigin} ${platformOrigin}; object-src 'none'; base-uri 'self'; form-action 'self'` }, injectTo: 'head-prepend' }];
+      return [{ tag: 'meta', attrs: { 'http-equiv': 'Content-Security-Policy', content: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://images-assets.nasa.gov https://epic.gsfc.nasa.gov https://assets.science.nasa.gov; media-src 'self' blob:; connect-src 'self' ${cloudOrigin}; object-src 'none'; base-uri 'self'; form-action 'self'` }, injectTo: 'head-prepend' }];
     },
   }],
   build: {

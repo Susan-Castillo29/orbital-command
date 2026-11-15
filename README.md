@@ -44,7 +44,7 @@ GitHub Pages cannot run the intermediary. It displays dated snapshots instead. A
 
 ## ORBITAL DEVELOPERS
 
-The application includes a project-integration area, versioned REST contract, deterministic proposal generator, MCP Streamable HTTP endpoint and branded read-only preview. Persistent cross-device previews require the Node backend and Supabase migration described in the [developer setup guide](docs/orbital-developers.md); the static GitHub Pages site alone cannot store project submissions. The proposal generator is rule based, does not use an AI model and does not validate scientific claims.
+The application includes a project-integration area, a Supabase Edge REST API, deterministic proposal generator and branded read-only preview. Persistent cross-device previews require the Supabase migrations and Edge Function deployment described in the [developer setup guide](docs/orbital-developers.md). A Node/MCP alternative remains available for server-side integrators. The proposal generator is rule based, does not use an AI model and does not validate scientific claims.
 
 ## Gameplay
 
@@ -72,7 +72,8 @@ Planetary sizes and distances are not to scale. Free flight compresses time; tra
 - `src/systems/engineering.ts`, `transit.ts`, `communications.ts` and `lunarCampaign.ts`: mission design, simulated time, communications and campaign state.
 - `src/data/`: mission, celestial-body and narrative data.
 - `server/nasa-proxy.mjs`, `server/orbital-platform.mjs`: server-side NASA intermediary and external-project REST/MCP services.
-- `supabase/migrations/202611150005_external_gamification_projects.sql`: private project storage and revocable preview links.
+- `supabase/functions/orbital-gamification/index.ts`: REST API backed by Supabase Auth and PostgreSQL.
+- `supabase/migrations/202611150005_external_gamification_projects.sql`, `202611150006_external_project_user_ownership.sql`: private project storage, user ownership and revocable preview links.
 - `public/openapi.yaml`, `docs/orbital-developers.md`: REST contract and third-party setup.
 - `public/textures/` and `public/illustrations/`: credited presentation textures and original vector artwork.
 - `tests/`: domain and browser checks.
@@ -92,4 +93,4 @@ Mission engineering offers three educational orbital profiles and three transit 
 
 For a requirement-by-requirement implementation status, limitations and verification commands, see [project status and checklist](docs/project-status-and-checklist.md).
 
-Accounts, private campaign backup, shared team planning and cooperative presence require Supabase setup. The external developer API requires its own Node backend configuration, server-only service-role secret, per-team API keys and migration; see [Supabase setup](docs/supabase-setup.md) and [ORBITAL Developers](docs/orbital-developers.md). These cloud services are disabled until configured. The [implementation checklist](docs/project-status-and-checklist.md) separates completed code from production configuration and remaining work.
+Accounts, private campaign backup, shared team planning and cooperative presence require Supabase setup. ORBITAL DEVELOPERS saves projects through its Supabase Edge Function and user sign-in; apply migrations and deploy the function as described in [Supabase setup](docs/supabase-setup.md) and [ORBITAL Developers](docs/orbital-developers.md). A separate Node/MCP backend remains optional for server-side integrations. The [implementation checklist](docs/project-status-and-checklist.md) separates completed code from production configuration and remaining work.

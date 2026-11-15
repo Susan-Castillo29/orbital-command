@@ -34,9 +34,9 @@ The fourth migration adds a durable team-session row, server heartbeat and stale
 - `tests/browser-collaboration.cjs` exercises two browser contexts using a mocked Supabase service. Start Vite with `VITE_SUPABASE_URL=https://orbitaltest.supabase.co VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_test npm run dev -- --host 127.0.0.1 --port 4190 --strictPort`, then run `node tests/browser-collaboration.cjs`. The mock does not connect to a real account.
 - Before inviting real users, test confirmation emails, two real accounts, the four-person limit, private backups, role changes, stale-write conflicts, revocation, restoration, cross-device behaviour, rate limits and RLS in the actual project. Review storage, backups, retention, account recovery and security monitoring for the expected deployment.
 
-## External project integration backend
+## ORBITAL DEVELOPERS project storage
 
-The external ORBITAL Developers API requires a separate Node backend and the new `202611150005_external_gamification_projects.sql` migration. This is not needed for the original game accounts/teams and GitHub Pages cannot execute that backend. See [`orbital-developers.md`](orbital-developers.md) for the server-only `SUPABASE_SERVICE_ROLE_KEY`, per-team `ORBITAL_API_KEYS`, exact CORS origins, REST/MCP routes and deployment steps. Never add the service role key to Pages Actions or a `VITE_*` setting.
+ORBITAL DEVELOPERS uses a Supabase Edge Function, so GitHub Pages does not need to host Node. Apply migrations `202611150005_external_gamification_projects.sql` and `202611150006_external_project_user_ownership.sql`, then deploy `orbital-gamification` with Supabase CLI and set `ORBITAL_APP_URL` as a Supabase function secret. The frontend derives the function URL from the existing Supabase project URL. See [`orbital-developers.md`](orbital-developers.md) for complete steps. The Node REST/MCP backend remains available for external server-side integrations. Never add the service role key to Pages Actions or a `VITE_*` setting.
 
 ## Global leaderboard and explorer diploma
 

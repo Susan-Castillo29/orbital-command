@@ -1,0 +1,3 @@
+[functions.orbital-gamification]
+# The function has public read-only routes and verifies user JWTs itself for writes.
+verify_jwt = false

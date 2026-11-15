@@ -50,17 +50,17 @@ This is a code-based status record, not a claim of expert validation. “Partial
 ## External project integration
 
 - [x] Added the `ORBITAL DEVELOPERS` area to the existing navigation and mission home, with capability/template discovery, a bilingual project form, bounded text attachments, private draft review, explicit public consent, unlisted read-only links and a branded preview route. Existing mission screens remain in place.
-- [x] Added REST `/api/v1` endpoints, deterministic proposal generation, input/size validation, API-key ownership, SHA-256 hashed preview tokens, public/private/unlisted access checks, revocation, origin controls and per-process rate limits. The first generator is explicitly not AI and flags missing information.
+- [x] Added REST `/api/v1` endpoints to the Node integration server with API-key ownership/rate limits, and the Supabase Edge Function for the web form with authenticated user ownership. Both validate inputs and protect/revoke private preview links.
 - [x] Added MCP 2025-11-25 Streamable HTTP JSON-RPC (`POST /mcp`, `GET` returns 405, no SSE server stream), six typed tools and public read-only capability/template tools.
-- [x] Added Supabase migration `202611150005_external_gamification_projects.sql`, OpenAPI 3.1 at `/openapi.yaml`, Node integration example, quick-start and deployment/security notes.
-- [~] Supabase persistence and the REST/MCP handlers are implemented, but production URLs/secrets are not present in this workspace. Apply migration 005 and deploy a Node backend before calling cross-device links live. GitHub Pages alone cannot run the backend.
+- [x] Added Supabase Edge Function `orbital-gamification`, account-based project saving, public/unlisted previews, OpenAPI 3.1, and ownership migration 006. The existing Node REST/MCP server remains available for external integrations.
+- [~] The Supabase Edge Function and schema are implemented in this repository, but still require applying migrations 005–006 and deploying the function to the real Supabase project. GitHub Pages builds the API URL from its existing Supabase setting.
 - [~] Current preview is an interactive proposal/mission briefing rendered by the existing React application. It does not generate arbitrary Three.js scenes or join project previews to the live co-op session. The cooperative capability remains marked experimental.
 - [ ] Comprehensive redesign of all 18 product areas, authenticated self-service API-key issuance, configurable AI providers, production rate limiting/monitoring, external penetration/security review and live tests against deployed Supabase/MCP clients remain outstanding.
 
 ## Verification and operations
 
 - Automated unit tests: `npm test`.
-- External platform unit test: `node --test tests/orbital-platform.test.mjs`; two-context browser smoke test with mock API: `npm run build` using `VITE_ORBITAL_PLATFORM_API_URL`, then `npm run test:developers`. The mocked browser test does not exercise a real Supabase project or physical device.
+- External platform unit test: `node --test tests/orbital-platform.test.mjs`; two-context browser smoke test with mock API: `npm run build` with Supabase URL and publishable key, then `npm run test:developers`. The mock does not exercise a real Supabase project or physical device.
 - Production build: `npm run build`.
 - Browser tests in a configured local environment: `npm run test:browser`, `npm run test:campaign`, `npm run test:telescope`, `npm run test:engineering`, `npm run test:reliability`, `npm run test:accessibility`, `npm run test:impact`; additional language and guidance scripts are in `tests/`.
 - Campaign ceremony browser regression: run `npm run build` before `npm run test:campaign`; Playwright serves the compiled assets directly, so no preview server is needed.
