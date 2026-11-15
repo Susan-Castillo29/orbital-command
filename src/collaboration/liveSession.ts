@@ -8,8 +8,9 @@ import type { TransitState } from '../systems/transit';
 
 export type LiveActivity = 'idle' | 'walk' | 'run' | 'interact' | 'aboard';
 export type LivePose = { x: number; y: number; z: number; yaw: number; activity: LiveActivity; mode: 'system' | 'flight' | 'orbit' | 'surface' };
+export type LiveMissionStatus = { missionId: string; objective: string; progress: number; location: string; fuel: number; energy: number; integrity: number; updatedAt: number };
 export type LiveWorldState = { missionId: string; screen: 'home' | 'mission' | 'engineering' | 'transit' | 'exploration'; updatedAt: number; routeUpdatedAt: number; launchId?: string; launchAt?: number; shipId?: ShipId; design?: MissionDesign | null; arrival?: TransitState | null; transitState?: TransitState | null; transitStarted?: boolean; transitRate?: number };
-export type LivePlayer = { userId: string; displayName: string; role: string; isHost: boolean; ready: boolean; pose: LivePose; worldState: LiveWorldState | null };
+export type LivePlayer = { userId: string; displayName: string; role: string; isHost: boolean; ready: boolean; pose: LivePose; missionStatus: LiveMissionStatus | null; worldState: LiveWorldState | null };
 export type LiveMessage = { id: string; userId: string; displayName: string; role: string; text: string; sentAt: number };
 export type LiveSnapshot = { connected: boolean; teamId: string | null; selfId: string | null; hostId: string | null; players: LivePlayer[]; worldState: LiveWorldState | null; messages: LiveMessage[]; error: string };
 
@@ -18,9 +19,10 @@ const empty: LiveSnapshot = { connected: false, teamId: null, selfId: null, host
 let snapshot = empty;
 let channel: RealtimeChannel | null = null;
 let connectionGeneration = 0;
-let identity: Omit<LivePlayer, 'pose' | 'worldState' | 'ready'> | null = null;
+let identity: Omit<LivePlayer, 'pose' | 'worldState' | 'ready' | 'missionStatus'> | null = null;
 let pose: LivePose = initialPose;
 let ready = false;
+let missionStatus: LiveMissionStatus | null = null;
 let worldState: LiveWorldState | null = null;
 let lastPoseSent = 0;
 let lastChatSent = 0;
@@ -82,6 +84,18 @@ function validWorld(value: unknown): value is LiveWorldState {
     && (state.transitRate === undefined || [0, 1, 10, 100, 1000].includes(state.transitRate));
 }
 
+function validMissionStatus(value: unknown): value is LiveMissionStatus | null {
+  if (value === null) return true;
+  if (!value || typeof value !== 'object') return false;
+  const item = value as Partial<LiveMissionStatus>;
+  return typeof item.missionId === 'string' && missionIds.has(item.missionId)
+    && typeof item.objective === 'string' && item.objective.length <= 180
+    && Number.isFinite(item.progress) && Number(item.progress) >= 0 && Number(item.progress) <= 100
+    && typeof item.location === 'string' && item.location.length <= 60
+    && ['fuel', 'energy', 'integrity'].every((key) => Number.isFinite(item[key as keyof LiveMissionStatus]) && Number(item[key as keyof LiveMissionStatus]) >= 0 && Number(item[key as keyof LiveMissionStatus]) <= 100)
+    && Number.isFinite(item.updatedAt);
+}
+
 function membersFromPresence() {
   if (!channel) return { players: [] as LivePlayer[], hostState: null as LiveWorldState | null };
   const state = channel.presenceState<Record<string, unknown>>();
@@ -89,7 +103,7 @@ function membersFromPresence() {
   for (const values of Object.values(state)) {
     const meta = values[values.length - 1] as Record<string, unknown> | undefined;
     if (!meta || typeof meta.userId !== 'string' || typeof meta.displayName !== 'string' || typeof meta.role !== 'string' || typeof meta.isHost !== 'boolean' || !validPose(meta.pose)) continue;
-    players.push({ userId: meta.userId, displayName: meta.displayName.slice(0, 48), role: meta.role, isHost: meta.isHost, ready: meta.ready === true, pose: meta.pose, worldState: validWorld(meta.worldState) ? meta.worldState : null });
+    players.push({ userId: meta.userId, displayName: meta.displayName.slice(0, 48), role: meta.role, isHost: meta.isHost, ready: meta.ready === true, pose: meta.pose, missionStatus: validMissionStatus(meta.missionStatus) ? meta.missionStatus : null, worldState: validWorld(meta.worldState) ? meta.worldState : null });
   }
   const hostState = players.find((player) => player.isHost)?.worldState ?? null;
   return { players: players.slice(0, 4), hostState };
@@ -97,7 +111,7 @@ function membersFromPresence() {
 
 async function trackPresence() {
   if (!channel || !identity) return;
-  const result = await channel.track({ ...identity, ready, pose, worldState });
+  const result = await channel.track({ ...identity, ready, pose, missionStatus, worldState });
   if (result !== 'ok' && snapshot.connected) publish({ ...snapshot, error: 'Realtime presence could not be updated.' });
 }
 
@@ -112,6 +126,7 @@ export async function connectLiveTeam(input: { teamId: string; userId: string; d
   identity = { userId: input.userId, displayName: input.displayName.trim().slice(0, 48) || 'Explorer', role: input.role, isHost: input.hostId === input.userId };
   pose = initialPose;
   ready = false;
+  missionStatus = null;
   worldState = null;
   lastPoseSent = 0;
   const next = cloudClient.channel(`orbital-team:${input.teamId}`, { config: { private: true, presence: { key: input.userId } } });
@@ -154,6 +169,8 @@ export async function disconnectLiveTeam() {
   const previous = channel;
   channel = null;
   identity = null;
+  ready = false;
+  missionStatus = null;
   worldState = null;
   if (previous && cloudClient) await cloudClient.removeChannel(previous);
   publish(empty);
@@ -172,6 +189,15 @@ export function setLiveReady(next: boolean) {
   if (!channel || !snapshot.connected) return;
   ready = next;
   lastPoseSent = 0;
+  void trackPresence();
+}
+
+let lastMissionStatusSent = 0;
+export function setLiveMissionStatus(next: Omit<LiveMissionStatus, 'updatedAt'>) {
+  if (!channel || !identity || !missionIds.has(next.missionId)) return;
+  missionStatus = { missionId: next.missionId, objective: next.objective.slice(0, 180), progress: Math.max(0, Math.min(100, next.progress)), location: next.location.slice(0, 60), fuel: Math.max(0, Math.min(100, next.fuel)), energy: Math.max(0, Math.min(100, next.energy)), integrity: Math.max(0, Math.min(100, next.integrity)), updatedAt: Date.now() };
+  if (Date.now() - lastMissionStatusSent < 900) return;
+  lastMissionStatusSent = Date.now();
   void trackPresence();
 }
 

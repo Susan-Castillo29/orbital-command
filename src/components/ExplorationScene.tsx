@@ -34,7 +34,7 @@ import { compressedTransmissionSeconds, estimatedSignalSeconds } from '../system
 import { isSimulatedDustStorm } from '../systems/weather';
 import { isEonetTarget, type EonetTarget } from '../systems/eonet';
 import { addBufferedData, emptyDataBuffers, totalBuffered, transmitBufferedData, type DataBuffers, type DataKind } from '../systems/dataBuffers';
-import { getLiveSnapshot, setLivePose, subscribeLiveSnapshot, type LivePlayer, type LivePose } from '../collaboration/liveSession';
+import { getLiveSnapshot, setLiveMissionStatus, setLivePose, subscribeLiveSnapshot, useLiveSession, type LivePlayer, type LivePose } from '../collaboration/liveSession';
 import { createPlayerAvatar, disposeAvatar, type AvatarRig } from './SolarSystemScene';
 
 type Mode = 'flight' | 'orbit' | 'surface';
@@ -325,6 +325,7 @@ function getTutorialStep(progress: LunarProgress, mode: Mode, resources: Explora
 
 export default function ExplorationScene({ mission, onExit, shipId, design, arrival, scienceTarget, language }: Props) {
   const t = (es: string, en: string) => language === "es" ? es : en;
+  const liveTeam=useLiveSession((value)=>value,(left,right)=>left.connected===right.connected&&left.players.length===right.players.length&&left.players.every((player,index)=>{const next=right.players[index];return Boolean(next&&player.userId===next.userId&&player.role===next.role&&player.ready===next.ready&&player.pose.activity===next.pose.activity&&player.missionStatus?.updatedAt===next.missionStatus?.updatedAt);}));
   const supportsSurface = ['moon', 'mars', 'mercury', 'titan'].includes(mission.id);
   const landingZones = getLandingZones(mission.id);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -1629,6 +1630,12 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
 
   const progressSummary = objectiveCompletion(progress);
   const orbitalProgressPercent = Math.round(((orbitalSurvey.arrived ? 1 : 0) + orbitalSurvey.scannedRegions.length + (orbitalSurvey.transmitted ? 1 : 0)) / 5 * 100);
+  const sharedPercent=supportsSurface?progressSummary.percent:orbitalProgressPercent;
+  const sharedObjective=supportsSurface?`${progressSummary.completed}/${progressSummary.total} ${t('objetivos de superficie','surface objectives')}`:`${orbitalSurvey.scannedRegions.length}/3 ${t('sectores analizados','sectors surveyed')}`;
+  const hostTelemetry=liveTeam.players.find(player=>player.isHost)?.missionStatus;
+  const roleObjective=(role:string)=>({planning:t('Coordinar ruta','Coordinate route'),engineering:t('Mantener sistemas y rover','Maintain systems and rover'),science:t('Analizar y recolectar muestras','Survey and collect samples'),communications:t('Transmitir informe','Transmit mission report')} as Record<string,string>)[role]??t('Apoyar al equipo','Support the team');
+  const activityLabel=(activity:string)=>({idle:t('En espera','Idle'),walk:t('Caminando','Walking'),run:t('Corriendo','Running'),interact:t('Interactuando','Interacting'),aboard:t('A bordo','Aboard')} as Record<string,string>)[activity]??activity;
+  useEffect(()=>{setLiveMissionStatus({missionId:mission.id,objective:sharedObjective,progress:sharedPercent,location:mode==='surface'?t('Superficie','Surface'):mode==='orbit'?t('Órbita','Orbit'):t('Vuelo','Flight'),fuel:resources.fuel,energy:resources.energy,integrity:resources.integrity});},[mission.id,sharedObjective,sharedPercent,mode,resources.fuel,resources.energy,resources.integrity]);
   const campaignRegions = [...(orbitalRegions[mission.id] ?? ['Sector norte', 'Sector ecuatorial', 'Sector sur'])];
   if (mission.id === 'earth' && scienceTarget && (!orbitalSurvey.scannedRegions.includes(0) || recordedTarget?.id === scienceTarget.id && recordedTarget.retrievedAt === scienceTarget.retrievedAt)) campaignRegions[0] = `EONET: ${scienceTarget.title}`;
   const selectedZone = landingZones.find((zone) => zone.id === landingZoneId) ?? landingZones[0];
@@ -1649,6 +1656,7 @@ export default function ExplorationScene({ mission, onExit, shipId, design, arri
   return (
     <section data-visualization="exploration" className="exploration-view" aria-label={t("Exploración espacial 3D", "3D space exploration")}>
       <div className="exploration-stage" ref={hostRef} /><FullscreenControl language={language} label={language === "en" ? "space exploration" : "exploración espacial"} />
+      {liveTeam.connected&&liveTeam.players.length>0&&<aside className="mission-team-progress" aria-label={t('Panel de equipo y progreso de misión','Team and mission progress panel')}><header><span>COOPERATIVE MULTIPLAYER</span><b>{liveTeam.players.length}/4</b></header><strong>{t('OBJETIVO COLECTIVO','TEAM OBJECTIVE')}</strong><p>{t(`Explorar ${localiseMission(mission,language).destination}, completar objetivos científicos y transmitir el informe.`,`Explore ${localiseMission(mission,language).destination}, complete science objectives and transmit the report.`)}</p><div className="team-progress-meter"><span>{t('PROGRESO REPORTADO','REPORTED PROGRESS')}</span><b>{Math.round(liveTeam.players.reduce((total,player)=>total+(player.missionStatus?.missionId===mission.id?player.missionStatus.progress:0),0)/liveTeam.players.length)}%</b></div><div className="team-progress-bar"><i style={{width:`${Math.round(liveTeam.players.reduce((total,player)=>total+(player.missionStatus?.missionId===mission.id?player.missionStatus.progress:0),0)/liveTeam.players.length)}%`}}/></div><div className="team-host-telemetry"><span>{t('TELEMETRÍA DEL ANFITRIÓN','HOST TELEMETRY')}</span>{hostTelemetry?.missionId===mission.id?<small>{t('Combustible','Fuel')} {Math.round(hostTelemetry.fuel)}% · {t('Energía','Power')} {Math.round(hostTelemetry.energy)}% · {t('Integridad','Integrity')} {Math.round(hostTelemetry.integrity)}%</small>:<small>{t('Esperando telemetría…','Waiting for telemetry…')}</small>}</div><ul>{liveTeam.players.map(player=>{const status=player.missionStatus?.missionId===mission.id?player.missionStatus:null;return <li key={player.userId}><span className="team-progress-avatar">{player.displayName.slice(0,1).toUpperCase()}</span><span className="team-progress-member"><b>{player.displayName}{player.isHost?` · ${t('ANFITRIÓN','HOST')}`:''}</b><small>{roleObjective(player.role)} · {activityLabel(player.pose.activity)}</small><small>{status?.objective??t('Preparando objetivo','Preparing objective')} · {status?.location??t('Sin datos','No data')}</small></span><strong>{status?`${Math.round(status.progress)}%`:'—'}</strong></li>;})}</ul></aside>}
       {firstLook && <div className="first-look"><div className="first-look-window" /><div className="first-look-title"><span>{t("LA PRIMERA MIRADA", "THE FIRST LOOK")}</span><strong>{t("Un solo hogar", "One home")}</strong></div><button onClick={() => { writeStorage('orbital-command-first-look-v1', 'done'); setFirstLook(false); }}>{t("CONTINUAR →", "CONTINUE →")}</button></div>}
       <div className="explore-topbar"><button className="explore-back" onClick={onExit}>{t("← CENTRO DE MISIÓN", "← MISSION CONTROL")}</button><div><span className="live-dot" /> {t("EXPLORACIÓN 3D", "3D EXPLORATION")} <small>· {mode === 'surface' ? t("SUPERFICIE", "SURFACE") : mode === 'orbit' ? t("ÓRBITA", "ORBIT") : cockpit ? t("CABINA", "COCKPIT") : t("VUELO LIBRE", "FREE FLIGHT")}</small></div><span className="explore-coords">{speed.toFixed(1)} <small>m/s</small></span></div>
       {hazardWarning && <div className={`flight-warning ${hazardWarning.startsWith('ADVERTENCIA') ? 'caution' : 'blocked'}`} role="alert"><span>⚠</span>{hazardWarning}</div>}
