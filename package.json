@@ -18,6 +18,7 @@
     "test:impact": "node tests/browser-impact.cjs",
     "test:engineering": "node tests/browser-engineering.cjs",
     "test:reliability": "node tests/browser-reliability.cjs",
+    "test:campaign": "node tests/browser-campaign-legacy.cjs",
     "test:exploration-failure": "node tests/browser-exploration-failure.cjs",
     "test:lab-language": "node tests/browser-lab-language.cjs"
   },
@@ -32,6 +33,7 @@
     "@types/three": "^0.177.0",
     "@vitejs/plugin-react": "^4.7.0",
     "axe-core": "4.14.0",
+    "playwright": "1.56.1",
     "typescript": "~5.8.3",
     "vite": "^6.3.5"
   }

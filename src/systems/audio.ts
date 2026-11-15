@@ -37,6 +37,29 @@ export function playSound(name: keyof typeof files) {
   } catch { playTone(name); }
 }
 
+/** A short, filtered radio burst for milestone transmissions. */
+export function playRadioCue() {
+  const settings = soundSettings();
+  if (!settings.enabled || settings.volume === 0) return;
+  try {
+    audioContext ??= new AudioContext();
+    if (audioContext.state === 'suspended') void audioContext.resume().catch(() => {});
+    const duration = 0.18;
+    const buffer = audioContext.createBuffer(1, Math.floor(audioContext.sampleRate * duration), audioContext.sampleRate);
+    const channel = buffer.getChannelData(0);
+    for (let index = 0; index < channel.length; index += 1) channel[index] = (Math.random() * 2 - 1) * (1 - index / channel.length);
+    const source = audioContext.createBufferSource();
+    const filter = audioContext.createBiquadFilter();
+    const gain = audioContext.createGain();
+    source.buffer = buffer;
+    filter.type = 'bandpass'; filter.frequency.value = 1250; filter.Q.value = 0.7;
+    gain.gain.value = 0.035 * settings.volume;
+    source.connect(filter).connect(gain).connect(audioContext.destination);
+    source.onended = () => { source.disconnect(); filter.disconnect(); gain.disconnect(); };
+    source.start(); source.stop(audioContext.currentTime + duration);
+  } catch { /* Radio effects must never interrupt gameplay. */ }
+}
+
 function playTone(name: keyof typeof files) {
   try {
     const settings = soundSettings();

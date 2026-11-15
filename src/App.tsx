@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import SolarSystemScene from './components/SolarSystemScene';
+import CampaignCelebration from './components/CampaignCelebration';
 import Commander from './components/Commander';
 import RenderSettings from './components/RenderSettings';
 import SceneBoundary from './components/SceneBoundary';
@@ -13,8 +14,11 @@ import { localiseMission } from './data/missionLocale';
 import type { Mission } from './data/missions';
 import { readStorage, writeStorage } from './systems/storage';
 import { initialPlayerProgress, loadPlayerProgress, type PlayerProgress } from './systems/playerProgress';
-import { playSound } from './systems/audio';
+import { playRadioCue, playSound } from './systems/audio';
 import { ships, type ShipId } from './data/ships';
+import { addCampaignPlaytime, beginNewCampaign, campaignCommanderMessage, completeCampaignIfEligible, getOrStartActiveCampaign, loadCampaignArchive, updateCampaignCommander, type CampaignRecord } from './systems/campaignLegacy';
+import { resetCampaignProgress } from './systems/campaignReset';
+import { loadReports } from './systems/science';
 
 const ExplorationScene = lazy(() => import('./components/ExplorationScene'));
 const MissionEngineering = lazy(() => import('./components/MissionEngineering'));
@@ -39,6 +43,12 @@ function App() {
   const [arrival, setArrival] = useState<TransitState | null>(null);
   const [notice, setNotice] = useState('');
   const [player, setPlayer] = useState<PlayerProgress>(() => typeof window === 'undefined' ? initialPlayerProgress : loadPlayerProgress());
+  const [activeCampaign, setActiveCampaign] = useState(() => getOrStartActiveCampaign());
+  const [campaignArchive, setCampaignArchive] = useState(loadCampaignArchive);
+  const [campaignDialog, setCampaignDialog] = useState<'victory' | 'records' | null>(null);
+  const [campaignRecord, setCampaignRecord] = useState<CampaignRecord | null>(null);
+  const [campaignMedalSaved, setCampaignMedalSaved] = useState(true);
+  const [commanderName, setCommanderName] = useState(() => readStorage('orbital-command-commander-name-v1')?.slice(0, 48) || 'Comandante');
   const [utc, setUtc] = useState(() => new Date().toISOString().slice(11, 19));
   const [theme, setTheme] = useState<'dark' | 'light'>(() => readStorage('orbital-command-theme') === 'light' ? 'light' : 'dark');
   const [shipId, setShipId] = useState<ShipId>(() => {
@@ -67,6 +77,35 @@ function App() {
     return () => { window.clearInterval(timer); window.removeEventListener('orbital-player-progress', onProgress); };
   }, []);
 
+  useEffect(() => {
+    let lastTick = Date.now();
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      const elapsed = now - lastTick;
+      lastTick = now;
+      if (document.visibilityState === 'visible') addCampaignPlaytime(elapsed);
+    }, 10_000);
+    const onVisibility = () => { lastTick = Date.now(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisibility); };
+  }, []);
+
+  useEffect(() => {
+    if (activeCampaign.completed) return;
+    const completion = completeCampaignIfEligible(player, loadReports(), commanderName);
+    if (!completion) return;
+    setActiveCampaign(getOrStartActiveCampaign());
+    setCampaignArchive(completion.archive);
+    setCampaignRecord(completion.record);
+    setCampaignMedalSaved(completion.persisted);
+    setCampaignDialog('victory');
+    if (completion.newlyCompleted) {
+      playSound('complete');
+      playRadioCue();
+      window.dispatchEvent(new CustomEvent('orbital-commander-transmission', { detail: { id: 'campaign-complete', title: 'MEDALLA DE EXPLORADOR GALÁCTICO', text: campaignCommanderMessage, forceSpeak: true } }));
+    }
+  }, [player, activeCampaign.completed, commanderName]);
+
   const selectMission = (id: string) => {
     const next = missions.find((item) => item.id === id);
     if (next && chapterUnlocked(next.id, player.completedMissions)) { setMission(next); if (visualGuide === 'select') setVisualGuide('prepare'); playSound('select'); }
@@ -79,6 +118,39 @@ function App() {
     playSound('launch');
     setNotice(`${mission.name} · expediente de misión preparado`);
     window.setTimeout(() => setNotice(''), 3500);
+  };
+
+  const openCampaignRecords = () => { setCampaignArchive(loadCampaignArchive()); setCampaignDialog('records'); };
+  const updateCommanderName = (name: string) => {
+    setCommanderName(name);
+    writeStorage('orbital-command-commander-name-v1', name);
+    if (campaignRecord) {
+      const result = updateCampaignCommander(campaignRecord.id, name);
+      setCampaignArchive(result.archive);
+      setCampaignRecord(result.archive.campaigns.find((record) => record.id === campaignRecord.id) ?? campaignRecord);
+      setCampaignMedalSaved(result.persisted);
+    }
+  };
+  const listenToCampaignMessage = () => {
+    playRadioCue();
+    window.dispatchEvent(new CustomEvent('orbital-commander-transmission', { detail: { id: 'campaign-complete', title: 'MEDALLA DE EXPLORADOR GALÁCTICO', text: campaignCommanderMessage, forceSpeak: true } }));
+  };
+  const startNewCampaign = () => {
+    const freshProgress = resetCampaignProgress();
+    const nextActive = beginNewCampaign();
+    setPlayer(freshProgress);
+    setActiveCampaign(nextActive);
+    setMission(missions.find((entry) => entry.id === 'earth')!);
+    setDesign(initialDesign);
+    setShipId('pioneer');
+    setArrival(null);
+    setScienceTarget(null);
+    setScreen('home');
+    setVisualGuide(null);
+    setCampaignArchive(loadCampaignArchive());
+    setCampaignDialog(null);
+    setCampaignRecord(null);
+    window.dispatchEvent(new Event('orbital-new-campaign-start'));
   };
 
   return (
@@ -115,7 +187,7 @@ function App() {
               <h1>{t('Tu próxima misión', 'Your next mission')}<br /><em>{t('empieza aquí.', 'starts here.')}</em></h1>
               <p className="intro-copy">{t('Explora el sistema solar. Elige un destino y convierte una pregunta científica en una misión espacial.', 'Explore the solar system. Choose a destination and turn a scientific question into a space mission.')}</p>
 
-              <div className="section-heading"><div><span className="eyebrow">{t('CAMPAÑA CIENTÍFICA', 'SCIENCE CAMPAIGN')}</span><h2>{t('Destinos disponibles ', 'Available destinations ')}<span>{String(availableMissions.length).padStart(2, '0')}</span></h2></div><span className="scroll-hint">{t('SE DESBLOQUEAN AL COMPLETAR CAPÍTULOS', 'UNLOCKED BY COMPLETING CHAPTERS')}</span></div>
+              <div className="section-heading"><div><span className="eyebrow">{t('CAMPAÑA CIENTÍFICA', 'SCIENCE CAMPAIGN')}</span><h2>{t('Destinos disponibles ', 'Available destinations ')}<span>{String(availableMissions.length).padStart(2, '0')}</span></h2></div><button className="campaign-records-button" type="button" onClick={openCampaignRecords}>{t('MEDALLAS · ', 'MEDALS · ')}{campaignArchive.medals.length} ↗</button><span className="scroll-hint">{t('SE DESBLOQUEAN AL COMPLETAR CAPÍTULOS', 'UNLOCKED BY COMPLETING CHAPTERS')}</span></div>
               <div className="mission-list" aria-label={t("Misiones disponibles", "Available missions")}>
                 {availableMissions.map((item, index) => (
                   <button className={`mission-card ${mission.id === item.id ? 'selected' : ''} ${visualGuide === 'select' && mission.id === item.id ? 'visual-guide-target' : ''}`} key={item.id} onClick={() => selectMission(item.id)} aria-pressed={mission.id === item.id}>
@@ -182,6 +254,7 @@ function App() {
       {visualGuide && ((screen === 'home' && (visualGuide === 'select' || visualGuide === 'prepare')) || (screen === 'mission' && visualGuide === 'design') || (screen === 'engineering' && visualGuide === 'confirm')) && <aside className="visual-guide" aria-live="polite"><div><strong>{t('GUÍA VISUAL', 'VISUAL GUIDE')} · {({select: 1, prepare: 2, design: 3, confirm: 4})[visualGuide]}/4</strong><p>{visualGuide === 'select' ? t('Selecciona la misión iluminada para comenzar.', 'Select the highlighted mission to begin.') : visualGuide === 'prepare' ? t('Pulsa Preparar misión para abrir el expediente.', 'Select Prepare mission to open the briefing.') : visualGuide === 'design' ? t('Pulsa Diseñar misión para elegir la nave y los instrumentos.', 'Select Design mission to choose your spacecraft and instruments.') : t('Revisa el diseño y pulsa Confirmar configuración para continuar.', 'Review your design and select Confirm configuration to continue.')}</p></div><button type="button" onClick={finishVisualGuide}>{t('Omitir', 'Skip')}</button></aside>}
       <Commander mission={mission} screen={screen} language={language} />
       {notice && <div className="toast" role="status"><span>✓</span>{notice}</div>}
+      {campaignDialog && <CampaignCelebration mode={campaignDialog} record={campaignDialog === 'victory' ? campaignRecord : null} archive={campaignArchive} language={language} medalSaved={campaignMedalSaved} onRestart={startNewCampaign} onReturnToMain={() => { setCampaignDialog(null); setScreen('home'); }} onClose={() => setCampaignDialog(null)} onUpdateCommander={updateCommanderName} onListen={listenToCampaignMessage} />}
     </main>
   );
 }

@@ -1,0 +1,47 @@
+.campaign-stage{position:fixed;inset:0;z-index:100;overflow:auto;display:grid;place-items:center;padding:28px;background:radial-gradient(ellipse at 50% 40%,#113750f2,#030811 73%);color:#eff9ff;font-family:system-ui,sans-serif}
+.app-shell .campaign-records-button{padding:7px 10px;border:1px solid #54788d;border-radius:3px;background:#0a1b29;color:#c9e6ef;font:700 9px system-ui;letter-spacing:.08em;cursor:pointer}
+.campaign-stars,.campaign-stage-glow{position:fixed;inset:0;pointer-events:none}
+.campaign-stars{opacity:.55;background-image:radial-gradient(2px 2px at 11% 17%,#fff 40%,transparent 60%),radial-gradient(1px 1px at 28% 76%,#9bdcf6 40%,transparent 60%),radial-gradient(2px 2px at 77% 24%,#fff 40%,transparent 60%),radial-gradient(1px 1px at 85% 63%,#f3d68e 40%,transparent 60%),radial-gradient(1px 1px at 55% 11%,#fff 40%,transparent 60%),radial-gradient(2px 2px at 42% 91%,#91c8e0 40%,transparent 60%);background-size:380px 310px;animation:campaign-star-drift 45s linear infinite}
+.campaign-stage-glow{background:radial-gradient(ellipse at 50% 40%,#2d8ab02b,transparent 50%)}
+.campaign-earth{position:fixed;width:min(42vw,420px);right:-8vw;top:8vh;opacity:.2;filter:drop-shadow(0 0 38px #50b3e878);animation:campaign-earth-turn 90s linear infinite}
+.campaign-stage-content{position:relative;z-index:1;width:min(900px,100%);text-align:center;padding:12px 0 20px;animation:campaign-content-in .9s ease both}
+.campaign-kicker{display:block;color:#93d9ee;font-size:11px;font-weight:800;letter-spacing:.2em}
+.campaign-stage h1{max-width:820px;margin:10px auto 8px;color:#f3d28c;font-size:clamp(26px,5vw,48px);line-height:1.12;text-shadow:0 0 28px #d89a3760}
+.campaign-intro{margin:0 auto 6px;color:#bbd1df;font-size:14px}
+.campaign-medal-unlock{height:230px;display:grid;place-items:center;animation:medal-arrive 1.35s cubic-bezier(.16,.9,.24,1.25) .2s both}
+.campaign-medal-unlock svg{width:205px;height:226px;overflow:visible;filter:drop-shadow(0 0 24px #ffdf81aa)}
+.campaign-medal-caption{margin:-4px 0 12px;color:#ffdf93;font-size:12px;font-weight:900;letter-spacing:.24em}
+.campaign-command-message{max-width:780px;margin:0 auto 16px;padding:14px 18px;border:1px solid #5485a4;background:#061523c9;text-align:left;box-shadow:0 10px 30px #0005}
+.campaign-command-message strong{color:#8bdff1;font-size:10px;letter-spacing:.14em}
+.campaign-command-message p{margin:8px 0;color:#eef7fa;font-size:14px;line-height:1.55;white-space:pre-line}
+.campaign-command-message button{border:1px solid #528ca7;background:#102b3e;color:#c5eff8;padding:8px 12px;font:700 10px system-ui;letter-spacing:.07em;cursor:pointer}
+.campaign-storage-alert{margin:12px auto;padding:10px 12px;max-width:780px;border-left:3px solid #f3b56e;background:#593b211c;color:#ffdaa8;text-align:left;font-size:12px}
+.campaign-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;margin:0 auto 18px;max-width:780px;background:#31546a;border:1px solid #31546a;text-align:left}
+.campaign-summary>div,.campaign-summary>label{min-width:0;padding:12px;background:#0a1b29}
+.campaign-summary span,.campaign-summary label{display:block;color:#9db7c7;font-size:10px;letter-spacing:.06em}
+.campaign-summary b{display:block;margin-top:6px;color:#edf7fa;font-size:14px;overflow-wrap:anywhere}
+.campaign-summary label{display:flex;flex-direction:column;gap:6px;color:#9db7c7}
+.campaign-summary input{min-width:0;width:100%;padding:7px;border:1px solid #35596a;border-radius:2px;background:#10283a;color:#f4fbff;font:inherit;font-size:14px}
+.campaign-destinations{grid-column:span 4}
+.campaign-actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
+.campaign-actions button,.campaign-confirm button{min-height:44px;padding:12px 18px;border-radius:3px;font:800 11px system-ui;letter-spacing:.08em;cursor:pointer}
+.campaign-primary{border:1px solid #f1d18e;background:linear-gradient(135deg,#ffe9aa,#bb782c);color:#201506}
+.campaign-secondary{border:1px solid #5a8196;background:#0c2232;color:#d9edf4}
+.campaign-confirm-backdrop{position:fixed;inset:0;z-index:3;display:grid;place-items:center;padding:20px;background:#01060be0;backdrop-filter:blur(8px)}
+.campaign-confirm{width:min(510px,100%);padding:26px;border:1px solid #b38a48;background:linear-gradient(145deg,#0d2130,#07111d);box-shadow:0 20px 80px #000b;text-align:left}
+.campaign-confirm h2{margin:10px 0;color:#ffe1a0;font-size:22px}
+.campaign-confirm p{color:#ccdae1;font-size:14px;line-height:1.6}
+.campaign-confirm>div{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:20px}
+.campaign-archive-medals{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;margin:28px auto}
+.campaign-archive-medal{display:grid;justify-items:center;gap:8px;max-width:280px;padding:20px;border:1px solid #c79d50;background:#382b19a8;color:#ffe4a2}
+.campaign-archive-medal>span{font-size:42px;text-shadow:0 0 20px #ffdb77}
+.campaign-archive-medal small{color:#cadce4}
+.campaign-archive-list{max-width:780px;margin:0 auto 20px;padding:0;list-style:none;text-align:left}
+.campaign-archive-list li{display:grid;grid-template-columns:1fr 2fr 1fr;gap:12px;padding:12px;border-bottom:1px solid #31546a;background:#091a27;color:#d5e7ee;font-size:12px}
+.campaign-archive-list time{text-align:right;color:#9db7c7}
+@keyframes medal-arrive{0%{opacity:0;transform:translateY(-80px) scale(.55) rotate(-20deg)}65%{opacity:1;transform:translateY(6px) scale(1.08) rotate(4deg)}100%{opacity:1;transform:translateY(0) scale(1) rotate(0)}}
+@keyframes campaign-content-in{from{opacity:0}to{opacity:1}}
+@keyframes campaign-earth-turn{to{transform:rotate(360deg)}}
+@keyframes campaign-star-drift{to{background-position:380px 310px}}
+@media(max-width:720px){.campaign-stage{padding:14px}.campaign-earth{width:82vw;right:-34vw;top:3vh}.campaign-medal-unlock{height:205px}.campaign-medal-unlock svg{width:180px;height:198px}.campaign-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.campaign-destinations{grid-column:span 2}.campaign-archive-list li{grid-template-columns:1fr}.campaign-archive-list time{text-align:left}}
+@media(prefers-reduced-motion:reduce){.campaign-stars,.campaign-earth,.campaign-medal-unlock,.campaign-stage-content{animation:none}}

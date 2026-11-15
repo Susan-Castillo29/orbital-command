@@ -98,7 +98,7 @@ export default function Commander({ mission, screen, language }: Props) {
     setWordStart(null);
   }
 
-  function play(transmission: Transmission, options = settings) {
+  function play(transmission: Transmission, options = settings, speechLanguage: Language = language) {
     stop();
     setVoiceError('');
     setCurrent(transmission);
@@ -108,9 +108,9 @@ export default function Commander({ mission, screen, language }: Props) {
     const id = playbackId.current;
     const utterance = new SpeechSynthesisUtterance(transmission.text);
     const availableVoices = window.speechSynthesis.getVoices();
-    const voice = availableVoices.find((item) => item.voiceURI === options.voiceURI && (language === 'en' ? /^en(?:-|_|$)/i : /^es(?:-|_|$)/i).test(item.lang)) ?? (language === 'en' ? selectEnglishVoice(availableVoices) : selectSpanishVoice(availableVoices));
+    const voice = availableVoices.find((item) => item.voiceURI === options.voiceURI && (speechLanguage === 'en' ? /^en(?:-|_|$)/i : /^es(?:-|_|$)/i).test(item.lang)) ?? (speechLanguage === 'en' ? selectEnglishVoice(availableVoices) : selectSpanishVoice(availableVoices));
     if (voice) utterance.voice = voice;
-    utterance.lang = voice?.lang ?? (language === 'en' ? 'en-GB' : 'es-DO');
+    utterance.lang = voice?.lang ?? (speechLanguage === 'en' ? 'en-GB' : 'es-DO');
     utterance.rate = options.rate;
     utterance.volume = options.volume;
     utterance.onstart = () => { if (id === playbackId.current) setSpeaking(true); };
@@ -151,14 +151,30 @@ export default function Commander({ mission, screen, language }: Props) {
   }, [screen]);
 
   useEffect(() => {
+    const onNewCampaign = () => {
+      stop();
+      const welcome = language === 'en' ? englishGuide[0] : introduction;
+      setCurrent(welcome);
+      setHistory([welcome]);
+      setGuideStep(0);
+      setOpen(false);
+    };
+    window.addEventListener('orbital-new-campaign-start', onNewCampaign);
+    return () => window.removeEventListener('orbital-new-campaign-start', onNewCampaign);
+  // The reset event restarts the guide in the currently selected language.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language]);
+
+  useEffect(() => {
     const onTransmission = (event: Event) => {
-      const detail = (event as CustomEvent<Transmission>).detail;
+      const detail = (event as CustomEvent<Transmission & { forceSpeak?: boolean }>).detail;
       if (!detail || typeof detail.id !== 'string' || typeof detail.title !== 'string' || typeof detail.text !== 'string') return;
-      const transmission = language === 'en' ? translateTransmission(detail, destination) : detail;
+      const isSpanishMedalMessage = detail.id === 'campaign-complete';
+      const transmission = language === 'en' && !isSpanishMedalMessage ? translateTransmission(detail, destination) : detail;
       setCurrent(transmission);
       setHistory((previous) => [...previous, transmission].slice(-40));
       showCaption();
-      if (audioActivated.current && settings.voice) play(transmission);
+      if ((audioActivated.current || detail.forceSpeak) && settings.voice) play(transmission, settings, isSpanishMedalMessage ? 'es' : language);
     };
     window.addEventListener('orbital-commander-transmission', onTransmission);
     return () => window.removeEventListener('orbital-commander-transmission', onTransmission);

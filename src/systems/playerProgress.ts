@@ -28,3 +28,9 @@ export function awardMission(missionId: string, xp: number, credits: number): { 
   volatileProgress = writeStorage(KEY, JSON.stringify(next)) ? null : next;
   return { progress: next, awarded: true };
 }
+
+export function resetPlayerProgress(): PlayerProgress {
+  const fresh = { ...initialPlayerProgress, completedMissions: [] };
+  volatileProgress = writeStorage(KEY, JSON.stringify(fresh)) ? null : fresh;
+  return fresh;
+}
